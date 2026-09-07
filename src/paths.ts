@@ -24,6 +24,13 @@ export const repoPaths = {
    * daemon. See hostPathForScratch.
    */
   scratch: join(REPO_ROOT, '.vpsctl-scratch'),
+  /**
+   * Held while mutating nginx config or requesting certificates.
+   *
+   * Inside the repo because bin/vpsctl bind-mounts the repo, so a containerised
+   * run and a host run contend on the same inode.
+   */
+  lock: join(REPO_ROOT, '.vpsctl.lock'),
 } as const;
 
 /**

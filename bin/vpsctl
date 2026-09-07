@@ -13,10 +13,22 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 IMAGE="vpsctl:local"
 ENV_FILE="$REPO_DIR/stack/.env"
 
-if [ ! -d "$REPO_DIR/dist" ]; then
-  echo "dist/ is missing. Build it first:" >&2
-  echo "  docker run --rm -v \"$REPO_DIR\":/repo -w /repo node:22-alpine sh -c 'corepack enable && pnpm install --frozen-lockfile && pnpm run build'" >&2
-  exit 1
+# dist/ is not committed, and `git pull` updates src/ without rebuilding it. An
+# app pipeline doing `git pull && vpsctl apply` would otherwise run last week's
+# renderer against this week's apps.yml, silently. Rebuild when the sources are
+# newer than the build output.
+needs_build=0
+if [ ! -f "$REPO_DIR/dist/cli.js" ]; then
+  needs_build=1
+elif [ -n "$(find "$REPO_DIR/src" "$REPO_DIR/package.json" "$REPO_DIR/tsconfig.build.json" \
+             -newer "$REPO_DIR/dist/cli.js" -print -quit 2>/dev/null)" ]; then
+  needs_build=1
+fi
+
+if [ "$needs_build" -eq 1 ]; then
+  echo "Building vpsctl from source..." >&2
+  docker run --rm -v "$REPO_DIR":/repo -w /repo node:22-alpine \
+    sh -c 'corepack enable && pnpm install --frozen-lockfile && pnpm run build' >&2
 fi
 
 if [ ! -f "$ENV_FILE" ]; then

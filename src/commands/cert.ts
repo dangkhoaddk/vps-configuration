@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { composeArgs, runDocker } from '../docker/run-docker.js';
+import { withConfigLock } from '../lock/config-lock.js';
+import { repoPaths } from '../paths.js';
 import { loadRegistry, selectApps } from './context.js';
 
 /**
@@ -14,6 +16,14 @@ import { loadRegistry, selectApps } from './context.js';
  * must survive.
  */
 export function certIssueCommand(options: { app: string; dryRun?: boolean }): number {
+  if (options.dryRun === true) return runCertIssue(options);
+
+  // Held for the same reason as apply: certbot writes into the shared certs
+  // directory, and issuance races count against the Let's Encrypt quota.
+  return withConfigLock(repoPaths.lock, `cert issue ${options.app}`, () => runCertIssue(options));
+}
+
+function runCertIssue(options: { app: string; dryRun?: boolean }): number {
   const config = loadRegistry();
   // selectApps throws on an unknown name, so this is always defined.
   const app = selectApps(config, options.app)[0]!;

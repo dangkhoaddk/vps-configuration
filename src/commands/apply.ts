@@ -3,6 +3,8 @@ import { reloadNginx } from '../nginx/reload-nginx.js';
 import { validateRenderedConfig } from '../nginx/validate-config.js';
 import { isNoOp, syncConfigFiles } from '../nginx/write-config-files.js';
 import { renderNginxConfig } from '../render/render-nginx-config.js';
+import { withConfigLock } from '../lock/config-lock.js';
+import { repoPaths } from '../paths.js';
 import { loadRegistry, selectApps } from './context.js';
 
 /**
@@ -14,6 +16,17 @@ import { loadRegistry, selectApps } from './context.js';
  * tested afterwards.
  */
 export function applyCommand(options: { app?: string; dryRun?: boolean }): number {
+  // A dry run never writes, so it does not take the lock. It can therefore read
+  // a half-applied state while a real apply is running: the report is advisory,
+  // not a snapshot.
+  if (options.dryRun === true) return runApply(options);
+
+  return withConfigLock(repoPaths.lock, `apply${options.app ? ` --app ${options.app}` : ''}`, () =>
+    runApply(options),
+  );
+}
+
+function runApply(options: { app?: string; dryRun?: boolean }): number {
   const config = loadRegistry();
   const requested = selectApps(config, options.app);
   const dryRun = options.dryRun ?? false;

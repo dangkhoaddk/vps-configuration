@@ -1,0 +1,85 @@
+name: Deploy edge config
+
+# Applies routing changes made in THIS repo: edits to apps.yml, the templates,
+# or the edge compose file.
+#
+# App deploys do not go through here. Each app's own pipeline already has an SSH
+# session on the VPS, so after starting its container it calls
+# `./bin/vpsctl apply --app <name>` directly. That avoids a cross-repo dispatch
+# and the personal access token it would need in all three app repos.
+#
+# Serialisation is not this workflow's job either. vpsctl takes a filesystem
+# lock on the VPS, which also covers app pipelines and operators running it by
+# hand. A concurrency group here would only order this repo's own runs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps.yml'
+      - 'templates/**'
+      - 'src/**'
+      - 'stack/compose.edge.yml'
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'Limit to one app (blank applies all)'
+        required: false
+        type: string
+
+# Belt and braces alongside vpsctl's own lock: no reason to have two runs of
+# this workflow racing to git pull the same checkout. Never cancel in progress,
+# since interrupting a half-applied config is worse than queueing.
+concurrency:
+  group: vps-edge-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment: prod
+    runs-on: ubuntu-latest
+    env:
+      APP_INPUT: ${{ inputs.app }}
+    steps:
+      - name: Apply on the VPS
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          # The app input reaches the script as an environment variable, never by
+          # template interpolation. Interpolating it would splice attacker-chosen
+          # text into a shell script that runs on the VPS as the deploy user.
+          envs: APP_INPUT
+          script: |
+            set -eu
+
+            REPO_DIR="$HOME/vps-configuration"
+
+            if [ ! -d "$REPO_DIR/.git" ]; then
+              echo "$REPO_DIR is not a checkout of this repo. Clone it first." >&2
+              exit 1
+            fi
+
+            cd "$REPO_DIR"
+            git fetch origin
+            git reset --hard origin/main
+
+            # Constrain the input before it becomes an argument. App names are
+            # lowercase letters, digits and dashes; anything else is rejected
+            # rather than passed along.
+            if [ -n "${APP_INPUT:-}" ]; then
+              case "$APP_INPUT" in
+                *[!a-z0-9-]*) echo "Invalid app name: $APP_INPUT" >&2; exit 1 ;;
+              esac
+              set -- --app "$APP_INPUT"
+            else
+              set --
+            fi
+
+            # bin/vpsctl rebuilds dist/ when src/ is newer, so a plain checkout
+            # is enough here.
+            #
+            # Dry run first, so the run log records the diff even on success.
+            ./bin/vpsctl apply "$@" --dry-run
+            ./bin/vpsctl apply "$@"
