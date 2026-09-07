@@ -1,0 +1,34 @@
+{{! http-level globals plus the upstreams not declared in a site file. }}
+{{! Rendered to conf.d/upstreams.conf. }}
+# --- 1. Rate Limiting Definitions ---
+limit_req_zone $binary_remote_addr zone=global_limit:10m rate=10r/s;
+# `booking_limit` is declared but referenced by no `limit_req` directive. It
+# reserves 10MB of shared memory for a rate limit that never applies. Carried
+# over unchanged to keep round one at parity; removal is tracked in
+# docs/parity-exceptions.md.
+limit_req_zone $binary_remote_addr zone=booking_limit:10m rate=2r/m;
+
+# --- 2. Optimized Timeouts ---
+client_body_timeout 10s;
+client_header_timeout 10s;
+send_timeout 10s;
+# Global default. An app may override it per server block via clientMaxBodySize.
+client_max_body_size 1M;
+{{#each upstreams}}
+
+upstream {{name}} {
+    server {{container}}:{{port}};
+}
+{{/each}}
+
+upstream netdata {
+    server {{monitor.container}}:{{monitor.port}};
+    keepalive 64;
+}
+
+# nginx resolves every upstream hostname at config-load time, even for upstreams
+# no server block references. An upstream whose container is absent from the
+# shared network therefore stops nginx from starting at all: it exits before
+# writing /run/nginx.pid, and the next reload fails with `invalid PID number ""`.
+# vpsctl enforces this by checking container resolvability before it renders a
+# block. See docs/architecture.md.

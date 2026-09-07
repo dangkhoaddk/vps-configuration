@@ -1,0 +1,158 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { loadAppsConfig } from '../src/config/load-apps-config.js';
+import { renderNginxConfig } from '../src/render/render-nginx-config.js';
+import { normalizeNginxConfig } from '../src/render/normalize-nginx-config.js';
+
+/**
+ * The acceptance criterion for the whole extraction: rendering apps.yml must
+ * reproduce the config production already serves.
+ *
+ * Runs against baseline/from-deploy-scripts/, generated from the three app
+ * repos' heredocs. When a live `nginx -T` capture lands, point OWNED_FILES at it
+ * and any difference is real drift worth investigating.
+ */
+
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const BASELINE_DIR = join(REPO_ROOT, 'baseline/from-deploy-scripts');
+
+const ENV = {
+  NGINX_CONF_DIR: '/home/deploy/spa-api/nginx/conf',
+  SNIPPETS_DIR: '/home/deploy/spa-api/nginx/snippets',
+  CERTS_ROOT: '/home/deploy/spa-api/certbot',
+  // Arbitrary: acme.email is used only by `cert issue`, never rendered into config.
+  ACME_EMAIL: 'ops@example.com',
+};
+
+function render(): Map<string, string> {
+  Object.assign(process.env, ENV);
+  return renderNginxConfig(loadAppsConfig(join(REPO_ROOT, 'apps.yml')));
+}
+
+const OWNED_FILES = [
+  'conf.d/http.conf',
+  'conf.d/upstreams.conf',
+  'conf.d/api-ssl.conf',
+  'conf.d/web-ssl.conf',
+  'conf.d/admin-ssl.conf',
+  'snippets/monitor.conf',
+];
+
+describe('rendered config matches the baseline', () => {
+  const rendered = render();
+
+  it.each(OWNED_FILES)('%s', (path) => {
+    const actual = rendered.get(path);
+    expect(actual, `renderer produced no ${path}`).toBeDefined();
+
+    const expected = readFileSync(join(BASELINE_DIR, path), 'utf8');
+    expect(normalizeNginxConfig(actual!)).toBe(normalizeNginxConfig(expected));
+  });
+
+  it('renders exactly the owned files, no more', () => {
+    expect([...rendered.keys()].sort()).toEqual([...OWNED_FILES].sort());
+  });
+});
+
+describe('the parity gate has teeth', () => {
+  it('fails when a security header changes', () => {
+    Object.assign(process.env, ENV);
+    const config = loadAppsConfig(join(REPO_ROOT, 'apps.yml'));
+    const tampered = {
+      ...config,
+      apps: config.apps.map((app) =>
+        app.name === 'admin' ? { ...app, frameOptions: 'DENY' as const } : app,
+      ),
+    };
+
+    const actual = renderNginxConfig(tampered).get('conf.d/admin-ssl.conf')!;
+    const expected = readFileSync(join(BASELINE_DIR, 'conf.d/admin-ssl.conf'), 'utf8');
+
+    expect(normalizeNginxConfig(actual)).not.toBe(normalizeNginxConfig(expected));
+  });
+
+  it('fails when websocket headers are dropped', () => {
+    Object.assign(process.env, ENV);
+    const config = loadAppsConfig(join(REPO_ROOT, 'apps.yml'));
+    const tampered = {
+      ...config,
+      apps: config.apps.map((app) => (app.name === 'web' ? { ...app, websockets: false } : app)),
+    };
+
+    const actual = renderNginxConfig(tampered).get('conf.d/web-ssl.conf')!;
+    const expected = readFileSync(join(BASELINE_DIR, 'conf.d/web-ssl.conf'), 'utf8');
+
+    expect(normalizeNginxConfig(actual)).not.toBe(normalizeNginxConfig(expected));
+  });
+
+  it('fails when the rate limit is dropped', () => {
+    Object.assign(process.env, ENV);
+    const config = loadAppsConfig(join(REPO_ROOT, 'apps.yml'));
+    const tampered = {
+      ...config,
+      apps: config.apps.map((app) =>
+        app.name === 'api' ? { ...app, rateLimit: undefined } : app,
+      ),
+    };
+
+    const actual = renderNginxConfig(tampered).get('conf.d/api-ssl.conf')!;
+    const expected = readFileSync(join(BASELINE_DIR, 'conf.d/api-ssl.conf'), 'utf8');
+
+    expect(normalizeNginxConfig(actual)).not.toBe(normalizeNginxConfig(expected));
+  });
+});
+
+/**
+ * When a container is not on the shared network, the CLI renders without that
+ * app. Getting this wrong is not a cosmetic bug: an upstream naming an absent
+ * container stops nginx from starting at all, which is the exact failure the
+ * exclusion exists to prevent.
+ */
+describe('rendering a subset of apps', () => {
+  function renderWithout(name: string): Map<string, string> {
+    Object.assign(process.env, ENV);
+    const config = loadAppsConfig(join(REPO_ROOT, 'apps.yml'));
+    return renderNginxConfig(
+      config,
+      config.apps.filter((app) => app.name !== name),
+    );
+  }
+
+  it('omits the excluded app\'s site file', () => {
+    expect([...renderWithout('admin').keys()]).not.toContain('conf.d/admin-ssl.conf');
+  });
+
+  it('omits the excluded app\'s upstream from upstreams.conf', () => {
+    // api is the app whose upstream lives in upstreams.conf rather than inline.
+    const upstreams = renderWithout('api').get('conf.d/upstreams.conf')!;
+    expect(upstreams).not.toContain('nestjs_backend');
+    expect(upstreams).not.toContain('spa-api:3000');
+  });
+
+  it('still declares the netdata upstream, which is not an app', () => {
+    expect(renderWithout('api').get('conf.d/upstreams.conf')!).toContain('monitor:19999');
+  });
+
+  it('keeps the excluded app in the port-80 ACME block', () => {
+    // Certificate renewal must not depend on the app container being up. That is
+    // exactly when renewal matters most.
+    expect(renderWithout('web').get('conf.d/http.conf')!).toContain('balispacafe.com');
+  });
+
+  it('leaves the remaining apps untouched', () => {
+    const files = renderWithout('admin');
+    const expected = readFileSync(join(BASELINE_DIR, 'conf.d/web-ssl.conf'), 'utf8');
+    expect(normalizeNginxConfig(files.get('conf.d/web-ssl.conf')!)).toBe(
+      normalizeNginxConfig(expected),
+    );
+  });
+});
+
+describe('renderer never emits Handlebars-escaped entities', () => {
+  it.each(OWNED_FILES)('%s', (path) => {
+    // A missing `noEscape: true` shows up here rather than as an unreadable diff.
+    expect(render().get(path)!).not.toMatch(/&(amp|quot|#x27|lt|gt);/);
+  });
+});

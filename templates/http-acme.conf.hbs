@@ -1,0 +1,12 @@
+{{! Port 80: serve the ACME challenge, redirect everything else to HTTPS. }}
+{{! Rendered to conf.d/http.conf. }}
+server {
+    listen 80;
+    server_name {{serverName}};
+    location /.well-known/acme-challenge/ {
+        root {{acmeWebroot}};
+    }
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
