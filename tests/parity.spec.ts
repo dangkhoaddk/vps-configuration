@@ -114,10 +114,9 @@ describe('rendering a subset of apps', () => {
   function renderWithout(name: string): Map<string, string> {
     Object.assign(process.env, ENV);
     const config = loadAppsConfig(join(REPO_ROOT, 'apps.yml'));
-    return renderNginxConfig(
-      config,
-      config.apps.filter((app) => app.name !== name),
-    );
+    return renderNginxConfig(config, {
+      apps: config.apps.filter((app) => app.name !== name),
+    });
   }
 
   it('omits the excluded app\'s site file', () => {
@@ -147,6 +146,47 @@ describe('rendering a subset of apps', () => {
     expect(normalizeNginxConfig(files.get('conf.d/web-ssl.conf')!)).toBe(
       normalizeNginxConfig(expected),
     );
+  });
+});
+
+/**
+ * The netdata upstream belongs to no app, so an absent monitor container would
+ * otherwise stop nginx starting and take all three sites down over a monitoring
+ * dashboard. Verified against real nginx: with the upstream gone and the
+ * snippets directory empty, the wildcard include matches zero files and the
+ * config still passes `nginx -t`.
+ */
+describe('rendering with the monitor container absent', () => {
+  function renderWithoutMonitor(): Map<string, string> {
+    Object.assign(process.env, ENV);
+    return renderNginxConfig(loadAppsConfig(join(REPO_ROOT, 'apps.yml')), { monitor: false });
+  }
+
+  it('omits the netdata upstream', () => {
+    const upstreams = renderWithoutMonitor().get('conf.d/upstreams.conf')!;
+    expect(upstreams).not.toContain('netdata');
+    expect(upstreams).not.toContain('monitor:19999');
+    // The dangling `keepalive` must go with it: outside an upstream block it is
+    // a hard nginx error, not a warning.
+    expect(upstreams).not.toContain('keepalive');
+  });
+
+  it('omits the monitor snippet entirely', () => {
+    expect([...renderWithoutMonitor().keys()]).not.toContain('snippets/monitor.conf');
+  });
+
+  it('leaves every site block untouched, wildcard include included', () => {
+    const files = renderWithoutMonitor();
+    for (const app of ['api', 'web', 'admin']) {
+      const expected = readFileSync(join(BASELINE_DIR, `conf.d/${app}-ssl.conf`), 'utf8');
+      expect(normalizeNginxConfig(files.get(`conf.d/${app}-ssl.conf`)!)).toBe(
+        normalizeNginxConfig(expected),
+      );
+    }
+  });
+
+  it('still declares the app upstreams', () => {
+    expect(renderWithoutMonitor().get('conf.d/upstreams.conf')!).toContain('nestjs_backend');
   });
 });
 

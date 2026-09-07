@@ -70,13 +70,36 @@ function renderHttpAcme(config: AppsConfig): string {
  * or not any server block references it, so an app excluded from this render
  * must not leave its upstream behind.
  */
-function renderUpstreams(config: AppsConfig, selected: readonly AppConfig[]): string {
+function renderUpstreams(
+  config: AppsConfig,
+  selected: readonly AppConfig[],
+  monitor: boolean,
+): string {
   return compileTemplate('upstreams.conf.hbs')({
     upstreams: selected
       .filter((app) => app.upstream.declareIn === 'upstreams')
       .map((app) => app.upstream),
-    monitor: config.monitor,
+    monitor: monitor ? config.monitor : null,
   });
+}
+
+export interface RenderOptions {
+  /**
+   * Apps to emit site blocks for. Defaults to all of them. The CLI narrows this
+   * to the apps whose upstream container is currently on the shared network.
+   */
+  apps?: readonly AppConfig[];
+  /**
+   * Whether the Netdata container is available. When false, its upstream and
+   * the `/monitor/` snippet are both omitted.
+   *
+   * The netdata upstream is not attached to any one app, so an absent monitor
+   * container would otherwise stop nginx starting and take every site down over
+   * a monitoring dashboard. Site blocks include the snippet through a wildcard,
+   * which matches zero files without error, so dropping both degrades cleanly:
+   * `/monitor/` stops resolving and everything else keeps serving.
+   */
+  monitor?: boolean;
 }
 
 /**
@@ -93,20 +116,23 @@ function renderUpstreams(config: AppsConfig, selected: readonly AppConfig[]): st
  */
 export function renderNginxConfig(
   config: AppsConfig,
-  apps?: readonly AppConfig[],
+  options: RenderOptions = {},
 ): Map<string, string> {
-  const selected = apps ?? config.apps;
+  const selected = options.apps ?? config.apps;
+  const monitor = options.monitor ?? true;
   const files = new Map<string, string>();
 
   files.set('conf.d/http.conf', renderHttpAcme(config));
-  files.set('conf.d/upstreams.conf', renderUpstreams(config, selected));
+  files.set('conf.d/upstreams.conf', renderUpstreams(config, selected, monitor));
   for (const app of selected) {
     files.set(`conf.d/${siteFileName(app)}`, renderSite(app));
   }
-  files.set(
-    'snippets/monitor.conf',
-    readFileSync(join(TEMPLATE_DIR, 'snippets/monitor.conf'), 'utf8'),
-  );
+  if (monitor) {
+    files.set(
+      'snippets/monitor.conf',
+      readFileSync(join(TEMPLATE_DIR, 'snippets/monitor.conf'), 'utf8'),
+    );
+  }
 
   return files;
 }

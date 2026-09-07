@@ -20,11 +20,13 @@ upstream {{name}} {
     server {{container}}:{{port}};
 }
 {{/each}}
+{{#if monitor}}
 
 upstream netdata {
     server {{monitor.container}}:{{monitor.port}};
     keepalive 64;
 }
+{{/if}}
 
 # nginx resolves every upstream hostname at config-load time, even for upstreams
 # no server block references. An upstream whose container is absent from the
