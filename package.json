@@ -1,0 +1,33 @@
+{
+  "name": "vps-configuration",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Single owner of the VPS edge: nginx routing, TLS issuance, and the nginx/certbot/netdata stack.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest",
+    "test:run": "vitest --run",
+    "vpsctl": "node dist/cli.js"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "handlebars": "^4.7.8",
+    "yaml": "^2.6.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8"
+  }
+}

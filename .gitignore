@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Real environment values. Only .env.example is committed.
+.env
+stack/.env
+
+# Renderer scratch output. The committed source of truth is apps.yml + templates.
+rendered/
+
+# nginx access/error logs. spa-api committed these by accident; do not repeat it.
+nginx-log/
+
+.DS_Store
