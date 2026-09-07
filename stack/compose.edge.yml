@@ -1,0 +1,118 @@
+# The VPS edge: TLS termination, certificate renewal, host monitoring.
+#
+# Ported from spa-api/docker-compose.sa.yml. The only intended differences are
+# path parameterization, a restart policy on certbot, and log rotation; see
+# stack/README.md for the full list and the reasoning.
+#
+# All three services set an explicit container_name, so this stack CANNOT run
+# alongside the spa-api one. Taking over means stopping those first, which is
+# the downtime window in phase 09 of the cutover.
+
+# Set explicitly. Compose otherwise derives the project name from the directory,
+# which would make it "stack" and, more importantly, make the netdata volume
+# names depend on where the repo happens to be checked out. Volume names are
+# prefixed with this, so changing it orphans Netdata's stored metrics.
+name: vps-edge
+
+services:
+  nginx:
+    image: nginx:latest
+    container_name: nginx_proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Rendered by `vpsctl apply`. nginx auto-includes *.conf from here at http
+      # level, which is why location snippets live in a separate directory.
+      - ${NGINX_CONF_DIR}:/etc/nginx/conf.d
+      # Location snippets shared between server blocks. Not under conf.d,
+      # because a bare `location` at http level is a syntax error.
+      - ${SNIPPETS_DIR}:/etc/nginx/snippets:ro
+      - ${NGINX_LOG_DIR}:/var/log/nginx
+      - ${CERTS_ROOT}/conf:/etc/letsencrypt
+      - ${CERTS_ROOT}/www:/var/www/certbot
+    networks:
+      - ext_network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot
+    # Not present in the original. Without a restart policy this renewal loop
+    # does not come back after a host reboot or an OOM kill, and nothing reports
+    # it: the failure only surfaces when a certificate expires weeks later.
+    restart: unless-stopped
+    volumes:
+      - ${CERTS_ROOT}/conf:/etc/letsencrypt
+      - ${CERTS_ROOT}/www:/var/www/certbot:rw
+    # Checks for renewal every 12 hours. `$$` is compose escaping for a literal
+    # `$`, so the container receives `${!}`.
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - ext_network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Netdata agent monitoring the VPS host. Reachable only through nginx at
+  # /monitor/ — port 19999 is deliberately not published, so the dashboard is
+  # never exposed directly on the server's public IP.
+  #
+  # It is still unauthenticated to anyone who can reach /monitor/ over HTTPS.
+  # Given the privileges below, that is a known gap; see docs/known-issues.md.
+  monitor:
+    image: netdata/netdata:stable
+    container_name: monitor
+    hostname: ${MONITOR_HOSTNAME}
+    restart: always
+    # Host PID namespace so the apps/processes charts show real host processes.
+    pid: host
+    cap_add:
+      - SYS_PTRACE
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - netdataconfig:/etc/netdata
+      - netdatalib:/var/lib/netdata
+      - netdatacache:/var/cache/netdata
+      # Host filesystem, read-only. Netdata reads these through
+      # NETDATA_HOST_PREFIX=/host to report host CPU, memory, disk, I/O and
+      # per-container metrics.
+      - /:/host/root:ro,rslave
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      - /var/log:/host/var/log:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Bridge network, not `network_mode: host`, so nginx can reach it by the
+    # `monitor` hostname and 19999 stays off the public IP. Trade-off: the
+    # network-interface charts show this container's interfaces rather than the
+    # host's. Switch to `network_mode: host` if host NIC traffic is needed, but
+    # then firewall port 19999 and repoint the `netdata` upstream.
+    networks:
+      - ext_network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  netdataconfig:
+  netdatalib:
+  netdatacache:
+
+networks:
+  ext_network:
+    external: true
