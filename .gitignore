@@ -13,3 +13,4 @@ rendered/
 nginx-log/
 
 .DS_Store
+.vpsctl-scratch/

@@ -1,0 +1,12 @@
+# Runtime for vpsctl, so the VPS needs only docker and git.
+#
+# The image carries the docker CLI, because vpsctl works by talking to the host's
+# docker daemon through a mounted socket. Pinned rather than floating: this is
+# the tool that rewrites production routing, and it should not change underneath
+# an operator without a commit.
+FROM node:22-alpine
+
+RUN apk add --no-cache docker-cli docker-cli-compose
+
+WORKDIR /repo
+ENTRYPOINT ["node", "dist/cli.js"]
