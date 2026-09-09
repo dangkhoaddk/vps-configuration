@@ -2,11 +2,6 @@
 {{! Rendered to conf.d/upstreams.conf. }}
 # --- 1. Rate Limiting Definitions ---
 limit_req_zone $binary_remote_addr zone=global_limit:10m rate=10r/s;
-# `booking_limit` is declared but referenced by no `limit_req` directive. It
-# reserves 10MB of shared memory for a rate limit that never applies. Carried
-# over unchanged to keep round one at parity; removal is tracked in
-# docs/parity-exceptions.md.
-limit_req_zone $binary_remote_addr zone=booking_limit:10m rate=2r/m;
 
 # --- 2. Optimized Timeouts ---
 client_body_timeout 10s;

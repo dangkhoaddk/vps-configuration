@@ -12,7 +12,6 @@ disappears quietly; when something is fixed it moves rather than vanishes.
 | 2 | `/monitor/` is unauthenticated | HTTP basic auth or IP allowlist in `templates/snippets/monitor.conf` |
 | 3 | `SSH_KEY` stored in `vars`, not `secrets`, in two app repos | Move to `secrets`, update workflow refs, rotate the key |
 | 4 | Port-80 ACME block omits admin's domains | Include every app in `acme.httpServerNameApps` |
-| 5 | `booking_limit` is a dead rate-limit zone | Delete two lines from `templates/upstreams.conf.hbs`, update baseline |
 | 6 | Dead nginx config in spa-web | Delete `spa-web/deploy/nginx/bali-spa.conf` |
 | 7 | Cutover blocked on a live baseline capture | Capture `docker exec nginx_proxy nginx -T` from the VPS, resolve any diff |
 
@@ -84,14 +83,6 @@ Reproduced faithfully for parity. See
 
 *Fix:* include every app's domains in `acme.httpServerNameApps`.
 
-### 5. `booking_limit` is a dead rate-limit zone
-
-Declared, never referenced, reserving 10 MB of shared memory. Carried over for
-parity.
-
-*Fix:* delete two lines from `templates/upstreams.conf.hbs` and update the
-baseline.
-
 ### 6. Dead nginx config in spa-web
 
 `spa-web/deploy/nginx/bali-spa.conf` is an orphaned port-80 template proxying to
@@ -113,6 +104,14 @@ recorded in `baseline/README.md`.
 resolve any difference before cutover. Live wins.
 
 ## Fixed
+
+### `booking_limit` was a dead rate-limit zone
+
+Declared in `upstreams.conf`, referenced by no `limit_req` directive, reserving
+10 MB of shared memory for a rate limit that never applied. Carried through round
+one for parity, then removed with a baseline update in the same commit.
+
+`global_limit`, which `api` actually uses, is untouched.
 
 ### Concurrent deploys raced on nginx config
 

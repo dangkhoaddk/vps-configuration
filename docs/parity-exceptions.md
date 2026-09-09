@@ -17,22 +17,6 @@ pass a reordering that changed behaviour.
 Round one is an extraction, not a cleanup. These are carried over unchanged so the
 migration can be proven safe. Each is a round-two candidate.
 
-### `booking_limit` is a dead rate-limit zone
-
-`upstreams.conf` declares:
-
-```nginx
-limit_req_zone $binary_remote_addr zone=booking_limit:10m rate=2r/m;
-```
-
-No `limit_req` directive anywhere references it. It reserves 10 MB of shared
-memory for a rate limit that never applies. Verified by grepping all three deploy
-scripts: `global_limit` is declared and used once, `booking_limit` is declared and
-never used.
-
-Rendered anyway. Removing it changes output and fails the gate. Removal is a
-one-line change plus a baseline update whenever someone wants it.
-
 ### `upstreams.conf` and site files disagree about where upstreams go
 
 `api` declares its upstream in `upstreams.conf`. `web` and `admin` declare theirs
