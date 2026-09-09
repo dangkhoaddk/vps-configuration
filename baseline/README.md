@@ -34,9 +34,13 @@ The authoritative source: what nginx actually loaded.
 docker exec nginx_proxy nginx -T > nginx-T.baseline.conf
 ```
 
-Until this exists the parity gate runs against source 1 only. When it lands, any
-difference between the two is real drift between the scripts and production, and
-must be resolved before cutover. Live wins by default.
+Until this exists the parity gate runs against source 1 only. **Drop the file in
+this directory and the gate switches to it automatically** — no test change
+needed. `tests/parity.spec.ts` names its source in the describe line, so the run
+output says which one it used.
+
+Any difference it then reports is real drift between the scripts and production,
+and must be resolved before cutover. Live wins by default.
 
 ## Why the scripts alone are not enough
 
