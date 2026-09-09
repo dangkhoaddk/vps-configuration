@@ -1,5 +1,5 @@
-{{! http-level globals plus the upstreams not declared in a site file. }}
-{{! Rendered to conf.d/upstreams.conf. }}
+{{! http-level globals, plus the netdata upstream, which belongs to no app. }}
+{{! Rendered to conf.d/upstreams.conf. App upstreams live in their site files. }}
 # --- 1. Rate Limiting Definitions ---
 limit_req_zone $binary_remote_addr zone=global_limit:10m rate=10r/s;
 
@@ -9,12 +9,6 @@ client_header_timeout 10s;
 send_timeout 10s;
 # Global default. An app may override it per server block via clientMaxBodySize.
 client_max_body_size 1M;
-{{#each upstreams}}
-
-upstream {{name}} {
-    server {{container}}:{{port}};
-}
-{{/each}}
 {{#if monitor}}
 
 upstream netdata {

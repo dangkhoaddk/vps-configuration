@@ -153,11 +153,14 @@ describe('rendering a subset of apps', () => {
     expect([...renderWithout('admin').keys()]).not.toContain('conf.d/admin-ssl.conf');
   });
 
-  it('omits the excluded app\'s upstream from upstreams.conf', () => {
-    // api is the app whose upstream lives in upstreams.conf rather than inline.
-    const upstreams = renderWithout('api').get('conf.d/upstreams.conf')!;
-    expect(upstreams).not.toContain('nestjs_backend');
-    expect(upstreams).not.toContain('spa-api:3000');
+  it('omits the excluded app\'s upstream from every rendered file', () => {
+    // The upstream is declared in the app's own site file, so dropping the file
+    // drops the upstream. nginx refuses to start when an upstream names a
+    // container it cannot resolve, so a leftover here would take every site
+    // down, not just this one.
+    const rendered = [...renderWithout('api').values()].join('\n');
+    expect(rendered).not.toContain('nestjs_backend');
+    expect(rendered).not.toContain('spa-api:3000');
   });
 
   it('still declares the netdata upstream, which is not an app', () => {
@@ -215,8 +218,11 @@ describe('rendering with the monitor container absent', () => {
     }
   });
 
-  it('still declares the app upstreams', () => {
-    expect(renderWithoutMonitor().get('conf.d/upstreams.conf')!).toContain('nestjs_backend');
+  it('still declares every app upstream, in the site files', () => {
+    const files = renderWithoutMonitor();
+    expect(files.get('conf.d/api-ssl.conf')!).toContain('nestjs_backend');
+    expect(files.get('conf.d/web-ssl.conf')!).toContain('web_frontend_ver2');
+    expect(files.get('conf.d/admin-ssl.conf')!).toContain('admin_frontend');
   });
 });
 

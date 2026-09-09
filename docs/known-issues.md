@@ -88,6 +88,11 @@ The parity gate currently runs against config reconstructed from the three deplo
 scripts, not from the running server. Two known reasons the two might differ are
 recorded in `baseline/README.md`.
 
+Since three deliberate changes have now landed (`booking_limit`, admin's ACME
+domains, and `declareIn`), a live capture will differ from what this repo renders
+in those three places by design. They are tabulated in
+[parity-exceptions.md](parity-exceptions.md). Anything beyond them is real drift.
+
 *Fix:* capture `docker exec nginx_proxy nginx -T` from the VPS, commit it, and
 resolve any difference before cutover. Live wins.
 

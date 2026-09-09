@@ -53,9 +53,16 @@ The three deploy scripts this repo replaces each worked around it separately:
 `vpsctl` states the rule once instead: **before rendering a block, check the
 upstream resolves; if not, leave it out and warn.**
 
-That is also why `apply` never renders a subset of apps into the shared directory
-without also dropping their upstreams. Dropping the site block alone would leave
-an upstream pointing at nothing.
+That is also why each app's `upstream` block is declared in its own
+`<name>-ssl.conf` rather than in the shared `upstreams.conf`. Dropping a site
+block has to drop its upstream too, or the render leaves an upstream pointing at
+nothing and nginx will not start. Keeping the two in one file makes that
+structural: excluding the app removes the file, and the upstream goes with it.
+There is no filter to get wrong.
+
+`upstreams.conf` therefore holds only http-level globals and the `netdata`
+upstream, which belongs to no app and is gated separately on the monitor
+container resolving.
 
 ### Why the check resolves DNS instead of listing containers
 

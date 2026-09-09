@@ -40,7 +40,6 @@ function renderSite(app: AppConfig): string {
     serverName: app.domains.join(' '),
     certDir: `${CERTS_MOUNT_PATH}/live/${app.primaryDomain}`,
     snippetsMountPath: SNIPPETS_MOUNT_PATH,
-    inlineUpstream: app.upstream.declareIn === 'site',
     upstream: app.upstream,
     frameOptions: app.frameOptions,
     websockets: app.websockets,
@@ -63,22 +62,19 @@ function renderHttpAcme(config: AppsConfig): string {
 }
 
 /**
- * Renders the http-level globals and every upstream not declared in a site file.
+ * Renders the http-level globals and the netdata upstream.
  *
- * Takes the *selected* apps, not all of them. An upstream naming a container
- * that is not on the shared network stops nginx from starting entirely, whether
- * or not any server block references it, so an app excluded from this render
- * must not leave its upstream behind.
+ * App upstreams are not here: each is declared in its own site file, so an app
+ * excluded from a render takes its upstream with it. That matters because an
+ * upstream naming a container which does not resolve stops nginx from starting
+ * entirely, whether or not any server block references it. Keeping the two in
+ * one file makes that structural rather than something a filter has to get
+ * right.
+ *
+ * netdata belongs to no app, so it stays here and is gated on `monitor`.
  */
-function renderUpstreams(
-  config: AppsConfig,
-  selected: readonly AppConfig[],
-  monitor: boolean,
-): string {
+function renderUpstreams(config: AppsConfig, monitor: boolean): string {
   return compileTemplate('upstreams.conf.hbs')({
-    upstreams: selected
-      .filter((app) => app.upstream.declareIn === 'upstreams')
-      .map((app) => app.upstream),
     monitor: monitor ? config.monitor : null,
   });
 }
@@ -123,7 +119,7 @@ export function renderNginxConfig(
   const files = new Map<string, string>();
 
   files.set('conf.d/http.conf', renderHttpAcme(config));
-  files.set('conf.d/upstreams.conf', renderUpstreams(config, selected, monitor));
+  files.set('conf.d/upstreams.conf', renderUpstreams(config, monitor));
   for (const app of selected) {
     files.set(`conf.d/${siteFileName(app)}`, renderSite(app));
   }

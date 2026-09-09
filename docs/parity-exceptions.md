@@ -17,16 +17,6 @@ pass a reordering that changed behaviour.
 Round one is an extraction, not a cleanup. These are carried over unchanged so the
 migration can be proven safe. Each is a round-two candidate.
 
-### `upstreams.conf` and site files disagree about where upstreams go
-
-`api` declares its upstream in `upstreams.conf`. `web` and `admin` declare theirs
-inline in their own site file. Nothing motivates the difference; it is an artefact
-of three scripts written at different times.
-
-`apps.yml` reproduces it with an ugly `declareIn` field whose docstring says so.
-New apps should use `site`. Normalising the three onto one convention is a
-round-two change: purely cosmetic in effect, but it changes rendered output.
-
 ### Comments differ in wording
 
 The templates carry better explanations than the heredocs they replace, including
@@ -55,6 +45,22 @@ the parity gate is unaffected.
 | `cert issue` passes `--cert-name` | certbot names the certificate directory after the first `-d` domain. The renderer and the existing-certificate guard both use `primaryDomain`. Today's `apps.yml` keeps those aligned by coincidence; nothing enforced it, and drift would have broken certificate loading and burned the Let's Encrypt duplicate quota at the same time. |
 | Reload no longer recreates nginx on a failing config test | The old scripts ran `nginx -t && nginx -s reload \|\| force-recreate`, recreating even when the config test failed. Recreating a container whose config nginx cannot load means nginx does not come back, turning a bad config into a total outage. `vpsctl` recreates only when the container is not running, or when the config tests clean but the reload fails. See [architecture.md](architecture.md). |
 | The netdata upstream is conditional | Previously rendered unconditionally. Because nginx resolves upstreams at config-load time, a stopped monitoring container would have stopped nginx starting and taken all three sites down. `vpsctl` omits the `netdata` upstream and the `/monitor/` snippet when the container is not resolvable. Site blocks include the snippet through a wildcard, which tolerates zero matches, so `/monitor/` stops resolving and everything else keeps serving. Output is identical whenever the monitor is up, which is the normal case, so the gate holds. |
+
+## Deliberate divergences from what the scripts wrote
+
+These **do** change rendered nginx config. The baseline was updated in the same
+commit as each one, so the gate stays green, but that means the baseline no
+longer reproduces the deploy scripts byte for byte.
+
+| Change | Effect on rendered output | Behaviour |
+|---|---|---|
+| `booking_limit` removed | `upstreams.conf` loses one `limit_req_zone` | None. No `limit_req` referenced it. Frees 10 MB of shared memory |
+| admin added to `acme.httpServerNameApps` | `http.conf` `server_name` gains admin's two domains | None today. That block is the sole `listen 80` server, so it already caught admin's challenges as nginx's default |
+| `declareIn` removed | `nestjs_backend` moves from `upstreams.conf` into `api-ssl.conf` | None. nginx resolves upstreams after parsing all of `conf.d`, verified by `vpsctl validate` |
+
+**Read this before comparing against a live capture.** These three are expected
+differences between what the VPS currently serves and what this repo now
+renders. Anything beyond them is real drift.
 
 ## Still outstanding
 

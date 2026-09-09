@@ -66,18 +66,6 @@ const upstreamSchema = z
     container: containerName,
     /** Port *inside* the container, not a host-published port. */
     port,
-    /**
-     * Which rendered file declares this upstream block.
-     *
-     * This field exists solely to reproduce an existing inconsistency: `api`
-     * declares its upstream in `upstreams.conf` while `web` and `admin` declare
-     * theirs inline in their own site config. Normalizing that would change
-     * rendered output and break the parity gate, so it is recorded as a
-     * round-two item in `docs/parity-exceptions.md` rather than fixed here.
-     *
-     * A new app should use `site`.
-     */
-    declareIn: z.enum(['upstreams', 'site']),
   })
   .strict();
 

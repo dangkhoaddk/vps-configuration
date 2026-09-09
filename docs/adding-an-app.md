@@ -32,7 +32,6 @@ One entry in `apps.yml`:
       name: shop_frontend
       container: shop-web
       port: 3000
-      declareIn: site
     frameOptions: DENY
     websockets: true
     includeMonitor: false
@@ -42,8 +41,6 @@ Notes on the fields that are not obvious:
 
 - `primaryDomain` must appear in `domains`. It names the certificate directory and
   the `ssl_certificate` path.
-- `declareIn: site` for anything new. `upstreams` exists only to reproduce an
-  existing inconsistency; see [parity-exceptions.md](parity-exceptions.md).
 - `websockets: true` emits the `Upgrade`/`Connection` proxy headers. Set it false
   if the app does not need them.
 - `includeMonitor` serves the Netdata dashboard under `/monitor/` on this domain.
@@ -86,8 +83,6 @@ cp /tmp/rendered/conf.d/shop-ssl.conf baseline/from-deploy-scripts/conf.d/
 # 2. http.conf, because the new domains join the port-80 ACME block.
 diff baseline/from-deploy-scripts/conf.d/http.conf /tmp/rendered/conf.d/http.conf
 cp /tmp/rendered/conf.d/http.conf baseline/from-deploy-scripts/conf.d/
-
-# 3. upstreams.conf, but ONLY if you used declareIn: upstreams (you should not).
 ```
 
 Read each diff before copying. For the existing apps' files the diff must be

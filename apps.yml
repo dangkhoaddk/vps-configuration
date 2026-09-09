@@ -45,8 +45,6 @@ apps:
       name: nestjs_backend
       container: spa-api
       port: 3000
-      # Parity: api is the one app whose upstream lives in upstreams.conf.
-      declareIn: upstreams
     frameOptions: DENY
     websockets: true
     rateLimit:
@@ -64,7 +62,6 @@ apps:
       name: web_frontend_ver2
       container: bali-spa-cafe
       port: 3000
-      declareIn: site
     frameOptions: DENY
     websockets: true
     clientMaxBodySize: 5m
@@ -79,7 +76,6 @@ apps:
       name: admin_frontend
       container: spa-admin
       port: 3000
-      declareIn: site
     # Parity: admin differs from the other two. Not a mistake, not normalized.
     frameOptions: SAMEORIGIN
     websockets: false

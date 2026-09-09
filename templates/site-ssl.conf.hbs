@@ -1,10 +1,14 @@
-{{! One HTTPS server block per app. Rendered to conf.d/<name>-ssl.conf. }}
-{{#if inlineUpstream}}
+{{! One HTTPS server block per app, plus the upstream it proxies to. }}
+{{! Rendered to conf.d/<name>-ssl.conf. }}
+{{! The upstream lives here rather than in upstreams.conf so that an app whose }}
+{{! container is absent takes its upstream with it when this file is not }}
+{{! rendered. An upstream naming a container that does not resolve stops nginx }}
+{{! from starting at all, so keeping the two together removes a way to get that }}
+{{! wrong. See docs/architecture.md. }}
 upstream {{upstream.name}} {
     server {{upstream.container}}:{{upstream.port}};
 }
 
-{{/if}}
 server {
     listen 443 ssl;
     http2 on;
