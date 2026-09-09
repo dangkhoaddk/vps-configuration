@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { composeArgs, runDocker } from '../docker/run-docker.js';
+import { certificateDirectory, planCertIssue } from './plan-cert-issue.js';
 import { withConfigLock } from '../lock/config-lock.js';
 import { repoPaths } from '../repo-paths.js';
 import { loadRegistry } from '../registry/load-registry.js';
@@ -29,45 +29,24 @@ function runCertIssue(options: { app: string; dryRun?: boolean }): number {
   // selectApps throws on an unknown name, so this is always defined.
   const app = selectApps(config, options.app)[0]!;
 
-  const liveDir = join(config.paths.certsRoot, 'conf/live', app.primaryDomain);
-  if (existsSync(liveDir)) {
-    console.log(`✓ certificate for ${app.primaryDomain} already exists; nothing to do`);
+  const decision = planCertIssue(config, options.app, {
+    certificateExists: existsSync(certificateDirectory(config, app)),
+  });
+
+  if (decision.kind === 'already-issued') {
+    console.log(`✓ certificate for ${decision.primaryDomain} already exists; nothing to do`);
     console.log(`  renewal is handled by the certbot container, not this command`);
     return 0;
   }
 
-  const args = [
-    ...composeArgs(),
-    'run',
-    '--rm',
-    '--entrypoint',
-    '/usr/local/bin/certbot',
-    'certbot',
-    'certonly',
-    // Without --cert-name, certbot names the directory after the FIRST -d
-    // domain. The renderer points ssl_certificate at live/<primaryDomain>, and
-    // the existing-cert guard above checks that same path, so letting -d
-    // ordering decide the name would break both at once: nginx would fail to
-    // load the cert, and every deploy would re-request one, burning the Let's
-    // Encrypt duplicate-certificate quota (five per week).
-    '--cert-name',
-    app.primaryDomain,
-    '--webroot',
-    `--webroot-path=${config.acme.webroot}`,
-    '--email',
-    config.acme.email,
-    '--agree-tos',
-    '--no-eff-email',
-    '--non-interactive',
-    ...app.domains.flatMap((domain) => ['-d', domain]),
-  ];
+  const args = [...composeArgs(), ...decision.certbotArgs];
 
   if (options.dryRun === true) {
     console.log(`(dry run) docker ${args.join(' ')}`);
     return 0;
   }
 
-  console.log(`Requesting a certificate for ${app.domains.join(', ')}...`);
+  console.log(`Requesting a certificate for ${decision.domains.join(', ')}...`);
   const result = runDocker(args);
   process.stdout.write(result.stdout);
   process.stderr.write(result.stderr);
