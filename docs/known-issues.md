@@ -11,7 +11,6 @@ disappears quietly; when something is fixed it moves rather than vanishes.
 | 1 | Certificates live inside `spa-api`'s checkout | Move to a named docker volume or a path this repo owns |
 | 2 | `/monitor/` is unauthenticated | HTTP basic auth or IP allowlist in `templates/snippets/monitor.conf` |
 | 3 | `SSH_KEY` stored in `vars`, not `secrets`, in two app repos | Move to `secrets`, update workflow refs, rotate the key |
-| 4 | Port-80 ACME block omits admin's domains | Include every app in `acme.httpServerNameApps` |
 | 6 | Dead nginx config in spa-web | Delete `spa-web/deploy/nginx/bali-spa.conf` |
 | 7 | Cutover blocked on a live baseline capture | Capture `docker exec nginx_proxy nginx -T` from the VPS, resolve any diff |
 
@@ -72,17 +71,6 @@ fixing, which is a change in those repos, not this one.
 *Fix:* move the value to `secrets`, update the three workflow references, rotate
 the key, since it should be assumed exposed.
 
-### 4. The port-80 ACME block omits admin's domains
-
-Admin's certificate renewal works only because that block is the sole `listen 80`
-server and so becomes nginx's default. Another app adding a port-80 block ahead of
-it would silently break renewal.
-
-Reproduced faithfully for parity. See
-[parity-exceptions.md](parity-exceptions.md).
-
-*Fix:* include every app's domains in `acme.httpServerNameApps`.
-
 ### 6. Dead nginx config in spa-web
 
 `spa-web/deploy/nginx/bali-spa.conf` is an orphaned port-80 template proxying to
@@ -104,6 +92,15 @@ recorded in `baseline/README.md`.
 resolve any difference before cutover. Live wins.
 
 ## Fixed
+
+### The port-80 ACME block omitted admin's domains
+
+Admin's renewal worked only because that block is the sole `listen 80` server and
+so becomes nginx's default. A second port-80 block added ahead of it would have
+broken renewal silently, surfacing weeks later as an expired certificate.
+
+`acme.httpServerNameApps` now lists every app. Behaviourally a no-op the day it
+landed, which is what made it safe to change.
 
 ### `booking_limit` was a dead rate-limit zone
 

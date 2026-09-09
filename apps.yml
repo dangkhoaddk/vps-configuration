@@ -25,11 +25,11 @@ acme:
   email: ${ACME_EMAIL}
   # Path inside the nginx and certbot containers, not on the host.
   webroot: /var/www/certbot
-  # Whose domains go in the port-80 ACME server block. `admin` is deliberately
-  # absent: that is what the current config does. Admin's challenge still works
-  # only because this is the sole `listen 80` block, making it nginx's default
-  # server. Round-two fix, see docs/parity-exceptions.md.
-  httpServerNameApps: [api, web]
+  # Whose domains go in the port-80 ACME server block. Every app belongs here, so
+  # that renewal never depends on this being nginx's default server: it is the
+  # only `listen 80` block today, and a second one added ahead of it would
+  # otherwise break challenges for any app missing from this list.
+  httpServerNameApps: [api, web, admin]
 
 monitor:
   container: monitor

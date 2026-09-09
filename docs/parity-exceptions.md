@@ -27,19 +27,6 @@ of three scripts written at different times.
 New apps should use `site`. Normalising the three onto one convention is a
 round-two change: purely cosmetic in effect, but it changes rendered output.
 
-### The port-80 ACME block omits admin's domains
-
-`http.conf` lists api's and web's domains but not admin's. Admin's ACME challenge
-works only because that block is the sole `listen 80` server and therefore nginx's
-default server.
-
-That is fragile. A future app adding another port-80 block ahead of it would
-silently break admin's certificate renewal, and nothing would report it until a
-certificate expired.
-
-Reproduced exactly via `acme.httpServerNameApps: [api, web]`. The fix is to
-include every app, which changes rendered output.
-
 ### Comments differ in wording
 
 The templates carry better explanations than the heredocs they replace, including

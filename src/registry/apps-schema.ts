@@ -149,11 +149,11 @@ export const appsConfigSchema = z
          * Referenced by app name rather than by repeating hostnames, so domains
          * stay single-sourced in `apps[].domains`.
          *
-         * Today this is `[api, web]`. `admin` is absent, and its ACME challenge
-         * only succeeds because that block is the sole `listen 80` server and so
-         * becomes nginx's default server. Any future app that adds another port-80
-         * block ahead of it would silently break admin's renewal. Reproduced as-is
-         * for round one; the fix is tracked in `docs/parity-exceptions.md`.
+         * List every app. An app omitted here still renews today, but only
+         * because this is the sole `listen 80` server and therefore nginx's
+         * default. A second port-80 block added ahead of it would silently break
+         * renewal for anything missing from this list, and that failure surfaces
+         * weeks later as an expired certificate.
          */
         httpServerNameApps: z.array(z.string()).min(1),
       })
