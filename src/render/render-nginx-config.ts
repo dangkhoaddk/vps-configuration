@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Handlebars from 'handlebars';
-import type { AppConfig, AppsConfig } from '../config/apps-schema.js';
+import type { AppConfig, AppsConfig } from '../registry/apps-schema.js';
 
 /**
  * Renders `apps.yml` into the nginx files this project owns.

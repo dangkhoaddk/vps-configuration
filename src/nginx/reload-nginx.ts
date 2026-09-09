@@ -1,4 +1,4 @@
-import type { AppsConfig } from '../config/apps-schema.js';
+import type { AppsConfig } from '../registry/apps-schema.js';
 import { composeArgs, runDocker } from '../docker/run-docker.js';
 
 /**

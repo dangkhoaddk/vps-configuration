@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { repoPaths } from '../paths.js';
+import { repoPaths } from '../repo-paths.js';
 
 /**
  * Every docker invocation goes through here.

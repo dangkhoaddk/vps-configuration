@@ -1,4 +1,4 @@
-import type { AppConfig, AppsConfig } from '../config/apps-schema.js';
+import type { AppConfig, AppsConfig } from '../registry/apps-schema.js';
 import { runDockerOrThrow } from '../docker/run-docker.js';
 
 /**

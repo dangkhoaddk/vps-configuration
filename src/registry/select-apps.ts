@@ -1,11 +1,4 @@
-import type { AppConfig, AppsConfig } from '../config/apps-schema.js';
-import { loadAppsConfig } from '../config/load-apps-config.js';
-import { repoPaths } from '../paths.js';
-
-/** Shared setup for every command: load the registry, resolve `--app`. */
-export function loadRegistry(): AppsConfig {
-  return loadAppsConfig(repoPaths.registry);
-}
+import type { AppConfig, AppsConfig } from './apps-schema.js';
 
 /**
  * Resolves an optional `--app` filter.

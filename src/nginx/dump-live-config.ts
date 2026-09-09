@@ -1,4 +1,4 @@
-import type { AppsConfig } from '../config/apps-schema.js';
+import type { AppsConfig } from '../registry/apps-schema.js';
 import { runDockerOrThrow } from '../docker/run-docker.js';
 
 /** The config the running nginx actually loaded, as `nginx -T` reports it. */

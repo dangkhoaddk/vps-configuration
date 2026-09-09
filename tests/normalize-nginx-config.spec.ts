@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeNginxConfig, stripInlineComment } from '../src/render/normalize-nginx-config.js';
+import { normalizeNginxConfig, stripInlineComment } from '../src/compare/normalize-nginx-config.js';
 
 describe('stripInlineComment', () => {
   it('removes a trailing comment', () => {

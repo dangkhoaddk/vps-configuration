@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { loadEnvFile } from './config/load-env-file.js';
-import { repoPaths } from './paths.js';
+import { loadEnvFile } from './registry/load-env-file.js';
+import { repoPaths } from './repo-paths.js';
 import { applyCommand } from './commands/apply.js';
-import { certIssueCommand } from './commands/cert.js';
-import {
-  diffCommand,
-  renderCommand,
-  stackCommand,
-  validateCommand,
-} from './commands/simple-commands.js';
+import { certIssueCommand } from './commands/cert-issue.js';
+import { diffCommand } from './commands/diff.js';
+import { renderCommand } from './commands/render.js';
+import { stackCommand } from './commands/stack.js';
+import { validateCommand } from './commands/validate.js';
 
 /**
  * vpsctl: the single entry point for changing the VPS edge.

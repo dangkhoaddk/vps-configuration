@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findDumpedFile, parseNginxDump } from '../src/render/parse-nginx-dump.js';
+import { findDumpedFile, parseNginxDump } from '../src/compare/parse-nginx-dump.js';
 
 /**
  * Shape of real `nginx -T` output: every loaded file, each behind a

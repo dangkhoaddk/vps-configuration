@@ -1,9 +1,10 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { AppsConfig } from '../config/apps-schema.js';
+import type { AppsConfig } from '../registry/apps-schema.js';
 import { runDocker } from '../docker/run-docker.js';
-import { hostPathForScratch, repoPaths } from '../paths.js';
-import { findDumpedFile, parseNginxDump } from '../render/parse-nginx-dump.js';
+import { hostPathForScratch } from '../host-paths.js';
+import { repoPaths } from '../repo-paths.js';
+import { findDumpedFile, parseNginxDump } from '../compare/parse-nginx-dump.js';
 
 /**
  * Runs nginx over rendered config in a throwaway container.

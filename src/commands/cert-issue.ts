@@ -2,8 +2,9 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { composeArgs, runDocker } from '../docker/run-docker.js';
 import { withConfigLock } from '../lock/config-lock.js';
-import { repoPaths } from '../paths.js';
-import { loadRegistry, selectApps } from './context.js';
+import { repoPaths } from '../repo-paths.js';
+import { loadRegistry } from '../registry/load-registry.js';
+import { selectApps } from '../registry/select-apps.js';
 
 /**
  * Obtains a Let's Encrypt certificate for one app, over the ACME webroot the

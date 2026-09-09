@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { hostPathFor } from '../paths.js';
+import { hostPathFor } from '../host-paths.js';
 
 /**
  * Writes rendered config to the host and removes files this repo no longer owns.

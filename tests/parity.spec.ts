@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { loadAppsConfig } from '../src/config/load-apps-config.js';
+import { loadAppsConfig } from '../src/registry/load-apps-config.js';
 import { renderNginxConfig } from '../src/render/render-nginx-config.js';
-import { normalizeNginxConfig } from '../src/render/normalize-nginx-config.js';
+import { normalizeNginxConfig } from '../src/compare/normalize-nginx-config.js';
 
 /**
  * The acceptance criterion for the whole extraction: rendering apps.yml must

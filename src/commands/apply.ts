@@ -4,8 +4,9 @@ import { validateRenderedConfig } from '../nginx/validate-config.js';
 import { isNoOp, syncConfigFiles } from '../nginx/write-config-files.js';
 import { renderNginxConfig } from '../render/render-nginx-config.js';
 import { withConfigLock } from '../lock/config-lock.js';
-import { repoPaths } from '../paths.js';
-import { loadRegistry, selectApps } from './context.js';
+import { repoPaths } from '../repo-paths.js';
+import { loadRegistry } from '../registry/load-registry.js';
+import { selectApps } from '../registry/select-apps.js';
 
 /**
  * Render, guard, validate, write, reload.

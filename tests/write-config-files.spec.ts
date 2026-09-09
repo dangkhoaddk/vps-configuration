@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isNoOp, syncConfigFiles } from '../src/nginx/write-config-files.js';
-import { hostPathFor } from '../src/paths.js';
+import { hostPathFor } from '../src/host-paths.js';
 
 /**
  * This module deletes files on a production host, so its behaviour is pinned
