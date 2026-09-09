@@ -75,60 +75,15 @@ of bug.
 These change behaviour on purpose. None of them alter rendered nginx config, so
 the parity gate is unaffected.
 
-### certbot gained a restart policy
-
-`docker-compose.sa.yml` gave `nginx` and `monitor` restart policies and gave
-certbot none, so the renewal loop did not survive a reboot or an OOM kill. Nothing
-reports that; it surfaces weeks later as an expired certificate.
-
-`compose.edge.yml` sets `restart: unless-stopped`.
-
-### Log rotation
-
-The original had none, so container logs grew unbounded on a small VPS. All three
-services now use `json-file` with 10 MB × 3, matching what the web app's compose
-file already did.
-
-### The compose project name is explicit
-
-Compose derives the project name from the directory and prefixes volume names with
-it. Left implicit, checking the repo out somewhere else would silently orphan
-Netdata's stored metrics. `name: vps-edge` is set explicitly. See
-`stack/README.md` for the volume migration this implies at cutover.
-
-### Netdata's hostname is a variable
-
-Was hardcoded to `balispacafe-vps`. Cosmetic, shows in the dashboard, and a
-hardcoded site name in a reusable edge stack is wrong.
-
-### `cert issue` passes `--cert-name`
-
-certbot names the certificate directory after the first `-d` domain. The renderer
-and the existing-certificate guard both use `primaryDomain`. Today's `apps.yml`
-keeps those aligned by coincidence; nothing enforced it, and drift would have
-broken certificate loading and burned the Let's Encrypt duplicate quota at the
-same time.
-
-### Reload no longer recreates nginx on a failing config test
-
-The old scripts ran `nginx -t && nginx -s reload || force-recreate`, recreating
-even when the config test failed. Recreating a container whose config nginx cannot
-load means nginx does not come back, turning a bad config into a total outage.
-
-`vpsctl` recreates only when the container is not running, or when the config
-tests clean but the reload fails. See [architecture.md](architecture.md).
-
-### The netdata upstream is conditional
-
-Previously rendered unconditionally. Because nginx resolves upstreams at
-config-load time, a stopped monitoring container would have stopped nginx starting
-and taken all three sites down.
-
-`vpsctl` omits the `netdata` upstream and the `/monitor/` snippet when the
-container is not resolvable. Site blocks include the snippet through a wildcard,
-which tolerates zero matches, so `/monitor/` stops resolving and everything else
-keeps serving. Output is identical whenever the monitor is up, which is the normal
-case, so the gate holds.
+| Change | Why |
+|---|---|
+| certbot gained a restart policy | `docker-compose.sa.yml` gave `nginx` and `monitor` restart policies but gave certbot none, so the renewal loop did not survive a reboot or an OOM kill. Nothing reports that; it surfaces weeks later as an expired certificate. `compose.edge.yml` sets `restart: unless-stopped`. |
+| Log rotation | The original had none, so container logs grew unbounded on a small VPS. All three services now use `json-file` with 10 MB x 3, matching what the web app's compose file already did. |
+| The compose project name is explicit | Compose derives the project name from the directory and prefixes volume names with it. Left implicit, checking the repo out somewhere else would silently orphan Netdata's stored metrics. `name: vps-edge` is set explicitly. See `stack/README.md` for the volume migration this implies at cutover. |
+| Netdata's hostname is a variable | Was hardcoded to `balispacafe-vps`. Cosmetic, shows in the dashboard, and a hardcoded site name in a reusable edge stack is wrong. |
+| `cert issue` passes `--cert-name` | certbot names the certificate directory after the first `-d` domain. The renderer and the existing-certificate guard both use `primaryDomain`. Today's `apps.yml` keeps those aligned by coincidence; nothing enforced it, and drift would have broken certificate loading and burned the Let's Encrypt duplicate quota at the same time. |
+| Reload no longer recreates nginx on a failing config test | The old scripts ran `nginx -t && nginx -s reload \|\| force-recreate`, recreating even when the config test failed. Recreating a container whose config nginx cannot load means nginx does not come back, turning a bad config into a total outage. `vpsctl` recreates only when the container is not running, or when the config tests clean but the reload fails. See [architecture.md](architecture.md). |
+| The netdata upstream is conditional | Previously rendered unconditionally. Because nginx resolves upstreams at config-load time, a stopped monitoring container would have stopped nginx starting and taken all three sites down. `vpsctl` omits the `netdata` upstream and the `/monitor/` snippet when the container is not resolvable. Site blocks include the snippet through a wildcard, which tolerates zero matches, so `/monitor/` stops resolving and everything else keeps serving. Output is identical whenever the monitor is up, which is the normal case, so the gate holds. |
 
 ## Still outstanding
 

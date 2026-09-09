@@ -5,10 +5,10 @@ Migrating from three deploy scripts writing nginx config to this repo owning it.
 Two independent moves, in this order. Fusing them would put a zero-risk change
 behind a downtime window.
 
-| | What moves | Downtime | Reversible |
-|---|---|---|---|
-| **A** | Who writes the config | none | per app, instantly |
-| **B** | Who owns the containers | ~30s, all sites | yes, two commands |
+| | What moves | Downtime | Reversible | Jump to |
+|---|---|---|---|---|
+| **A** | Who writes the config | none | per app, instantly | [A. Config authorship](#a-config-authorship) |
+| **B** | Who owns the containers | ~30s, all sites | yes, two commands | [B. Container ownership](#b-container-ownership) |
 
 ## Blocked until the baseline is captured
 

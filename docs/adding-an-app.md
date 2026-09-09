@@ -2,6 +2,14 @@
 
 Putting a new site on this VPS. Roughly fifteen minutes, most of it DNS.
 
+| Step | What happens |
+|---|---|
+| [1. Add it to the registry](#1-add-it-to-the-registry) | One entry in `apps.yml` |
+| [2. Open a pull request](#2-open-a-pull-request) | Update the baseline files the change actually touches |
+| [3. Merge and deploy](#3-merge-and-deploy) | `deploy.yml` applies on the VPS, or do it by hand |
+| [4. Issue a certificate](#4-issue-a-certificate) | `vpsctl cert issue`, then re-apply |
+| [5. Wire up the app's deploy pipeline](#5-wire-up-the-apps-deploy-pipeline) | Add the apply step after the app's own container starts |
+
 ## Before you start
 
 - The app's container runs on the `ext_network` docker network and listens on a

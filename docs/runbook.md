@@ -4,6 +4,19 @@ For when something is broken and you want commands, not prose.
 
 All commands run from `~/vps-configuration` on the VPS.
 
+## Symptom index
+
+| Symptom | Section |
+|---|---|
+| Site returns 502 or connection refused | [A site returns 502 or connection refused](#a-site-returns-502-or-connection-refused) |
+| `invalid PID number ""` on reload | [`invalid PID number ""` on reload](#invalid-pid-number--on-reload) |
+| nginx won't start at all | [nginx will not start at all](#nginx-will-not-start-at-all) |
+| Certificate expiring or expired | [A certificate is expiring or expired](#a-certificate-is-expiring-or-expired) |
+| Need to roll back a routing change | [Rolling back a bad routing change](#rolling-back-a-bad-routing-change) |
+| `Timed out waiting for .vpsctl.lock` | [`Timed out waiting for .vpsctl.lock`](#timed-out-waiting-for-vpsctllock) |
+| `Directory does not exist` from bin/vpsctl | [`Directory does not exist` from bin/vpsctl](#directory-does-not-exist-from-binvpsctl) |
+| Need a full edge restart | [Full edge restart](#full-edge-restart) |
+
 ## First look
 
 ```sh

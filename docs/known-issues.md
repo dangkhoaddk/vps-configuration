@@ -3,6 +3,19 @@
 Problems found while extracting the edge, with current status. Nothing here
 disappears quietly; when something is fixed it moves rather than vanishes.
 
+## Open at a glance
+
+| # | Issue | Fix |
+|---|---|---|
+| 0 | Routine applies don't appear in this repo's history | Revisit cross-repo dispatch via a GitHub App, if audit trail becomes priority |
+| 1 | Certificates live inside `spa-api`'s checkout | Move to a named docker volume or a path this repo owns |
+| 2 | `/monitor/` is unauthenticated | HTTP basic auth or IP allowlist in `templates/snippets/monitor.conf` |
+| 3 | `SSH_KEY` stored in `vars`, not `secrets`, in two app repos | Move to `secrets`, update workflow refs, rotate the key |
+| 4 | Port-80 ACME block omits admin's domains | Include every app in `acme.httpServerNameApps` |
+| 5 | `booking_limit` is a dead rate-limit zone | Delete two lines from `templates/upstreams.conf.hbs`, update baseline |
+| 6 | Dead nginx config in spa-web | Delete `spa-web/deploy/nginx/bali-spa.conf` |
+| 7 | Cutover blocked on a live baseline capture | Capture `docker exec nginx_proxy nginx -T` from the VPS, resolve any diff |
+
 ## Open
 
 ### 0. Routine applies do not appear in this repo's history

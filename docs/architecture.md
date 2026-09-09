@@ -45,10 +45,13 @@ docker run --rm -v "$PWD/rendered/conf.d":/etc/nginx/conf.d:ro nginx:latest ngin
 ```
 
 The three deploy scripts this repo replaces each worked around it separately:
-starting app containers before nginx, hand-omitting absent upstreams from
-`upstreams.conf`, and wildcarding the monitor include. `vpsctl` states the rule
-once: **before rendering a block, check the upstream resolves; if not, leave it
-out and warn.**
+
+- starting app containers before nginx
+- hand-omitting absent upstreams from `upstreams.conf`
+- wildcarding the monitor include
+
+`vpsctl` states the rule once instead: **before rendering a block, check the
+upstream resolves; if not, leave it out and warn.**
 
 That is also why `apply` never renders a subset of apps into the shared directory
 without also dropping their upstreams. Dropping the site block alone would leave
@@ -56,12 +59,14 @@ an upstream pointing at nothing.
 
 ### Why the check resolves DNS instead of listing containers
 
-`docker network inspect` reports container *names*. Docker's embedded DNS also
-answers on network *aliases*. A container reachable as `spa-api` but named
+`docker network inspect` reports container _names_. Docker's embedded DNS also
+answers on network _aliases_. A container reachable as `spa-api` but named
 something else is present as far as nginx is concerned and absent as far as
 `network inspect` is concerned, so a name-based check would silently drop a
-working site. `vpsctl` resolves the hostname from inside the network, exactly as
-nginx does.
+working site.
+
+`vpsctl` resolves the hostname from inside the network instead, exactly as nginx
+does.
 
 ## Why the /monitor/ snippet lives outside conf.d
 
@@ -73,8 +78,10 @@ Site blocks include it through a wildcard, `include /etc/nginx/snippets/monitor*
 A wildcard that matches zero files is not an error, which is what lets the whole
 thing degrade cleanly when Netdata is not running: `vpsctl` omits both the
 `netdata` upstream and the snippet, `/monitor/` stops resolving, and every site
-keeps serving. Without that, a stopped monitoring container would take down three
-production sites.
+keeps serving.
+
+Without that, a stopped monitoring container would take down three production
+sites.
 
 ## Why netdata uses bridge networking, not host
 
@@ -82,10 +89,12 @@ production sites.
 It would also put port 19999 on the server's public IP.
 
 The stack uses bridge networking instead, so nginx can reach it as `monitor` and
-19999 is never published. The cost is that the interface charts show the
-container's interfaces rather than the host's. If host NIC traffic is ever
-needed, switch to host networking, firewall 19999, and repoint the `netdata`
-upstream.
+19999 is never published. The trade-off:
+
+| | |
+|---|---|
+| Cost | Interface charts show the container's interfaces, not the host's |
+| If host NIC traffic is ever needed | Switch to host networking, firewall 19999, repoint the `netdata` upstream |
 
 ## Why netdata is so heavily privileged
 
@@ -106,9 +115,10 @@ running proxy before anything noticed.
 
 The validator has to fake two things, because nginx resolves both at parse time:
 
-- **Upstream hostnames**, via `--add-host <container>:127.0.0.1`.
-- **TLS certificates**, generated self-signed inside the container. Only the cert
-  *paths* come from rendered config, and the parity gate covers those.
+| What | How it's faked |
+|---|---|
+| Upstream hostnames | `--add-host <container>:127.0.0.1` |
+| TLS certificates | Generated self-signed inside the container. Only the cert _paths_ come from rendered config, and the parity gate covers those |
 
 It runs `nginx -T` rather than `-t`, and asserts the rendered files appear in the
 dump. That is not belt and braces: docker creates a missing bind-mount source as
@@ -128,14 +138,15 @@ that window cannot tell whether the lock is one millisecond or one week old. It
 must either steal it, which lets two applies run at once, or never reclaim it
 after a crash. Hard-linking a fully written temporary file removes the choice.
 
-The lock is on the VPS rather than in CI on purpose. A GitHub `concurrency` group
-only orders runs within one repository's workflows. It does nothing about a second
-app's pipeline, or an operator running `vpsctl apply` by hand, which is exactly
-when a deploy is most likely to be in flight.
+The lock lives on the VPS rather than in CI, on purpose:
 
-It does not protect against an app repo that still writes nginx config with its
-own script, since those never take the lock. That is a reason to keep the
-migration window short, not a reason to distrust the lock.
+- A GitHub `concurrency` group only orders runs within one repository's
+  workflows. It does nothing about a second app's pipeline, or an operator
+  running `vpsctl apply` by hand, which is exactly when a deploy is most likely
+  to be in flight.
+- It does not protect against an app repo that still writes nginx config with
+  its own script, since those never take the lock. That is a reason to keep the
+  migration window short, not a reason to distrust the lock.
 
 Because applies are invoked from each app's own SSH session rather than through a
 cross-repo trigger, they are logged in that app's repository rather than this
