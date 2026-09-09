@@ -1,22 +1,51 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { loadAppsConfig } from '../src/registry/load-apps-config.js';
 import { renderNginxConfig } from '../src/render/render-nginx-config.js';
 import { normalizeNginxConfig } from '../src/compare/normalize-nginx-config.js';
+import { findDumpedFile, parseNginxDump } from '../src/compare/parse-nginx-dump.js';
 
 /**
  * The acceptance criterion for the whole extraction: rendering apps.yml must
  * reproduce the config production already serves.
  *
- * Runs against baseline/from-deploy-scripts/, generated from the three app
- * repos' heredocs. When a live `nginx -T` capture lands, point OWNED_FILES at it
- * and any difference is real drift worth investigating.
+ * Two sources, in ascending order of authority. See baseline/README.md.
+ *
+ *  1. baseline/from-deploy-scripts/, reconstructed from the three app repos'
+ *     heredocs. A faithful reproduction of what those scripts *write*, which is
+ *     not the same as what the VPS *serves*.
+ *  2. baseline/nginx-T.baseline.conf, captured from the running nginx. This is
+ *     the authority, and it wins automatically as soon as the file exists.
+ *
+ * Until the capture lands, every difference against the live server is
+ * unambiguously production drift. That property is why the registry's rendered
+ * output is held byte-stable until it does.
  */
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE_DIR = join(REPO_ROOT, 'baseline/from-deploy-scripts');
+const LIVE_CAPTURE = join(REPO_ROOT, 'baseline/nginx-T.baseline.conf');
+
+/**
+ * The live dump, parsed, or null when it has not been captured yet.
+ *
+ * `nginx -T` emits every file nginx loaded, including the image's own
+ * nginx.conf and mime.types. Only OWNED_FILES are compared; the rest is parsed
+ * and ignored.
+ */
+const liveDump = existsSync(LIVE_CAPTURE)
+  ? parseNginxDump(readFileSync(LIVE_CAPTURE, 'utf8'))
+  : null;
+
+/** What the authoritative source says this file should contain. */
+function baselineFor(path: string): string | undefined {
+  if (liveDump !== null) return findDumpedFile(liveDump, path);
+
+  const fromScripts = join(BASELINE_DIR, path);
+  return existsSync(fromScripts) ? readFileSync(fromScripts, 'utf8') : undefined;
+}
 
 const ENV = {
   NGINX_CONF_DIR: '/home/deploy/spa-api/nginx/conf',
@@ -40,15 +69,16 @@ const OWNED_FILES = [
   'snippets/monitor.conf',
 ];
 
-describe('rendered config matches the baseline', () => {
+describe(`rendered config matches the baseline (${liveDump ? 'live capture' : 'deploy scripts'})`, () => {
   const rendered = render();
 
   it.each(OWNED_FILES)('%s', (path) => {
     const actual = rendered.get(path);
     expect(actual, `renderer produced no ${path}`).toBeDefined();
 
-    const expected = readFileSync(join(BASELINE_DIR, path), 'utf8');
-    expect(normalizeNginxConfig(actual!)).toBe(normalizeNginxConfig(expected));
+    const expected = baselineFor(path);
+    expect(expected, `no baseline for ${path}`).toBeDefined();
+    expect(normalizeNginxConfig(actual!)).toBe(normalizeNginxConfig(expected!));
   });
 
   it('renders exactly the owned files, no more', () => {
@@ -68,7 +98,7 @@ describe('the parity gate has teeth', () => {
     };
 
     const actual = renderNginxConfig(tampered).get('conf.d/admin-ssl.conf')!;
-    const expected = readFileSync(join(BASELINE_DIR, 'conf.d/admin-ssl.conf'), 'utf8');
+    const expected = baselineFor('conf.d/admin-ssl.conf')!;
 
     expect(normalizeNginxConfig(actual)).not.toBe(normalizeNginxConfig(expected));
   });
@@ -82,7 +112,7 @@ describe('the parity gate has teeth', () => {
     };
 
     const actual = renderNginxConfig(tampered).get('conf.d/web-ssl.conf')!;
-    const expected = readFileSync(join(BASELINE_DIR, 'conf.d/web-ssl.conf'), 'utf8');
+    const expected = baselineFor('conf.d/web-ssl.conf')!;
 
     expect(normalizeNginxConfig(actual)).not.toBe(normalizeNginxConfig(expected));
   });
@@ -98,7 +128,7 @@ describe('the parity gate has teeth', () => {
     };
 
     const actual = renderNginxConfig(tampered).get('conf.d/api-ssl.conf')!;
-    const expected = readFileSync(join(BASELINE_DIR, 'conf.d/api-ssl.conf'), 'utf8');
+    const expected = baselineFor('conf.d/api-ssl.conf')!;
 
     expect(normalizeNginxConfig(actual)).not.toBe(normalizeNginxConfig(expected));
   });
@@ -142,7 +172,7 @@ describe('rendering a subset of apps', () => {
 
   it('leaves the remaining apps untouched', () => {
     const files = renderWithout('admin');
-    const expected = readFileSync(join(BASELINE_DIR, 'conf.d/web-ssl.conf'), 'utf8');
+    const expected = baselineFor('conf.d/web-ssl.conf')!;
     expect(normalizeNginxConfig(files.get('conf.d/web-ssl.conf')!)).toBe(
       normalizeNginxConfig(expected),
     );
@@ -178,7 +208,7 @@ describe('rendering with the monitor container absent', () => {
   it('leaves every site block untouched, wildcard include included', () => {
     const files = renderWithoutMonitor();
     for (const app of ['api', 'web', 'admin']) {
-      const expected = readFileSync(join(BASELINE_DIR, `conf.d/${app}-ssl.conf`), 'utf8');
+      const expected = baselineFor(`conf.d/${app}-ssl.conf`)!;
       expect(normalizeNginxConfig(files.get(`conf.d/${app}-ssl.conf`)!)).toBe(
         normalizeNginxConfig(expected),
       );
