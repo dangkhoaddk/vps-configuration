@@ -16,6 +16,12 @@ import { existsSync, readFileSync } from 'node:fs';
  * parser accepts more, but every variable this repo uses is a plain path or
  * string, and a permissive hand-rolled parser that disagrees with compose's
  * would be worse than one that only handles the documented shape.
+ *
+ * @example
+ * // input (stack/.env contains `NGINX_CONF_DIR=/srv/nginx/conf.d`)
+ * loadEnvFile('/repo/stack/.env')
+ * // output
+ * undefined // side effect: process.env.NGINX_CONF_DIR is now '/srv/nginx/conf.d'
  */
 export function loadEnvFile(path: string): void {
   if (!existsSync(path)) return;

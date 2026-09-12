@@ -40,7 +40,15 @@ for host in "$@"; do
 done
 `;
 
-/** Resolves every name in one container rather than one container per name. */
+/**
+ * Resolves every name in one container rather than one container per name.
+ *
+ * @example
+ * // input
+ * resolvableHostnames('edge-net', ['spa-api', 'spa-admin', 'netdata'])
+ * // output
+ * Set { 'spa-api', 'netdata' } // "spa-admin" did not resolve
+ */
 export function resolvableHostnames(network: string, hostnames: readonly string[]): Set<string> {
   const unique = [...new Set(hostnames)];
   if (unique.length === 0) return new Set();
@@ -64,13 +72,36 @@ export function resolvableHostnames(network: string, hostnames: readonly string[
   return new Set(result.stdout.split('\n').map((line) => line.trim()).filter(Boolean));
 }
 
+export interface SkippedApp {
+  app: AppConfig;
+  reason: string;
+}
+
 export interface UpstreamAvailability {
   resolvable: AppConfig[];
-  skipped: { app: AppConfig; reason: string }[];
+  skipped: SkippedApp[];
   /** The Netdata container belongs to no app but is named by upstreams.conf. */
   monitor: boolean;
 }
 
+/**
+ * Splits the candidate apps into those whose upstream container resolves on
+ * the shared network and those that must be skipped, and reports the monitor
+ * container separately since it belongs to no app.
+ *
+ * @example
+ * // input
+ * checkUpstreams(
+ *   { network: 'edge-net', monitor: { container: 'netdata', port: 19999 }, apps: [spaApiConfig, spaAdminConfig] } as AppsConfig,
+ *   [spaApiConfig, spaAdminConfig],
+ * )
+ * // output
+ * {
+ *   resolvable: [spaApiConfig],
+ *   skipped: [{ app: spaAdminConfig, reason: '"spa-admin" does not resolve on network "edge-net"' }],
+ *   monitor: true,
+ * }
+ */
 export function checkUpstreams(
   config: AppsConfig,
   candidates: readonly AppConfig[],
@@ -81,7 +112,7 @@ export function checkUpstreams(
   ]);
 
   const resolvable: AppConfig[] = [];
-  const skipped: { app: AppConfig; reason: string }[] = [];
+  const skipped: SkippedApp[] = [];
 
   for (const app of candidates) {
     if (present.has(app.upstream.container)) {

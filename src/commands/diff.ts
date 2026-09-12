@@ -13,6 +13,12 @@ import { repoPaths } from '../repo-paths.js';
  *
  * Comments and blank lines are normalised away, so this reports behavioural
  * differences rather than wording changes.
+ *
+ * @example
+ * // input
+ * { live: true }
+ * // output
+ * 0 // no differences found; prints "✓ rendered config matches the running nginx"
  */
 export function diffCommand(options: { live?: boolean }): number {
   const config = loadRegistry();
@@ -47,6 +53,15 @@ export function diffCommand(options: { live?: boolean }): number {
   return differences === 0 ? 0 : 1;
 }
 
+/**
+ * Reads the committed baseline file for a rendered path, if it exists.
+ *
+ * @example
+ * // input
+ * "conf.d/api.conf"
+ * // output
+ * "server {\n  server_name api.balispacafe.com;\n  ...\n}\n"
+ */
 function readBaseline(relativePath: string): string | undefined {
   const path = join(repoPaths.baseline, relativePath);
   return existsSync(path) ? readFileSync(path, 'utf8') : undefined;

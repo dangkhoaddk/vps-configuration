@@ -18,11 +18,41 @@ export type CertIssueDecision =
   | { kind: 'already-issued'; primaryDomain: string }
   | { kind: 'issue'; certbotArgs: string[]; domains: string[]; primaryDomain: string };
 
-/** Where certbot keeps this app's certificate, and where the renderer points nginx. */
+/**
+ * Where certbot keeps this app's certificate, and where the renderer points nginx.
+ *
+ * @example
+ * // input
+ * config.paths.certsRoot === "/opt/certbot"
+ * app === { name: "api", domains: ["api.balispacafe.com"], primaryDomain: "api.balispacafe.com", ... }
+ * // output
+ * "/opt/certbot/conf/live/api.balispacafe.com"
+ */
 export function certificateDirectory(config: AppsConfig, app: AppConfig): string {
   return join(config.paths.certsRoot, 'conf/live', app.primaryDomain);
 }
 
+/**
+ * Decides whether `cert-issue` needs to call certbot at all, and if so builds
+ * the exact `certbot certonly` argv for it.
+ *
+ * @example
+ * // input
+ * config, "api", { certificateExists: false }
+ * // output
+ * {
+ *   kind: "issue",
+ *   domains: ["api.balispacafe.com"],
+ *   primaryDomain: "api.balispacafe.com",
+ *   certbotArgs: [
+ *     "run", "--rm", "--entrypoint", "/usr/local/bin/certbot", "certbot", "certonly",
+ *     "--cert-name", "api.balispacafe.com",
+ *     "--webroot", "--webroot-path=/var/www/certbot",
+ *     "--email", "ops@balispacafe.com", "--agree-tos", "--no-eff-email", "--non-interactive",
+ *     "-d", "api.balispacafe.com",
+ *   ],
+ * }
+ */
 export function planCertIssue(
   config: AppsConfig,
   appName: string,

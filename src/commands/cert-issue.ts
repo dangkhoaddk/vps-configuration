@@ -6,6 +6,11 @@ import { repoPaths } from '../repo-paths.js';
 import { loadRegistry } from '../registry/load-registry.js';
 import { selectApps } from '../registry/select-apps.js';
 
+export interface CertIssueOptions {
+  app: string;
+  dryRun?: boolean;
+}
+
 /**
  * Obtains a Let's Encrypt certificate for one app, over the ACME webroot the
  * port-80 server block already serves.
@@ -15,8 +20,14 @@ import { selectApps } from '../registry/select-apps.js';
  * the guard, a handful of deploys in one day exhausts the quota and blocks
  * genuine renewals. The deploy scripts this replaces had the same guard, and it
  * must survive.
+ *
+ * @example
+ * // input
+ * { app: "api", dryRun: false }
+ * // output
+ * 0 // certificate issued for api.balispacafe.com, or "already exists" short-circuit
  */
-export function certIssueCommand(options: { app: string; dryRun?: boolean }): number {
+export function certIssueCommand(options: CertIssueOptions): number {
   if (options.dryRun === true) return runCertIssue(options);
 
   // Held for the same reason as apply: certbot writes into the shared certs
@@ -24,7 +35,16 @@ export function certIssueCommand(options: { app: string; dryRun?: boolean }): nu
   return withConfigLock(repoPaths.lock, `cert issue ${options.app}`, () => runCertIssue(options));
 }
 
-function runCertIssue(options: { app: string; dryRun?: boolean }): number {
+/**
+ * Runs the certificate decision and, unless it is a dry run, calls certbot.
+ *
+ * @example
+ * // input
+ * { app: "api", dryRun: true }
+ * // output
+ * 0 // logs the docker/certbot command line that would run; nothing requested
+ */
+function runCertIssue(options: CertIssueOptions): number {
   const config = loadRegistry();
   // selectApps throws on an unknown name, so this is always defined.
   const app = selectApps(config, options.app)[0]!;

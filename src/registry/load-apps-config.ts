@@ -22,6 +22,12 @@ export class AppsConfigError extends Error {
  *
  * Missing variables are collected rather than thrown one at a time, so a fresh
  * VPS reports its entire missing `.env` in a single run.
+ *
+ * @example
+ * // input (with ACME_EMAIL=admin@example.com set in the environment)
+ * substituteEnvReferences({ email: '${ACME_EMAIL}' }, new Set())
+ * // output
+ * { email: 'admin@example.com' }
  */
 function substituteEnvReferences(node: unknown, missing: Set<string>): unknown {
   if (typeof node === 'string') {
@@ -50,6 +56,13 @@ function substituteEnvReferences(node: unknown, missing: Set<string>): unknown {
   return node;
 }
 
+/**
+ * @example
+ * // input
+ * error.issues === [{ path: ['apps', 0, 'name'], message: 'must be lowercase letters, digits and dashes' }]
+ * // output
+ * '  apps.0.name: must be lowercase letters, digits and dashes'
+ */
 function formatValidationIssues(error: import('zod').ZodError): string {
   return error.issues
     .map((issue) => {
@@ -65,6 +78,19 @@ function formatValidationIssues(error: import('zod').ZodError): string {
  * Fails loudly and completely: an invalid registry must never render a partial
  * nginx config, because a partial config is one that silently drops a site or a
  * security header.
+ *
+ * @example
+ * // input
+ * loadAppsConfig('/repo/apps.yml')
+ * // output
+ * {
+ *   network: 'edge_net',
+ *   nginxContainer: 'nginx',
+ *   paths: { nginxConfDir: '/etc/nginx/conf.d', snippetsDir: '/etc/nginx/snippets', certsRoot: '/etc/letsencrypt' },
+ *   acme: { email: 'admin@example.com', webroot: '/var/www/certbot', httpServerNameApps: ['web'] },
+ *   monitor: { container: 'netdata', port: 19999 },
+ *   apps: [{ name: 'web', domains: ['example.com'], primaryDomain: 'example.com', upstream: { name: 'web_backend', container: 'web', port: 3000 }, frameOptions: 'DENY', websockets: false, includeMonitor: true }],
+ * }
  */
 export function loadAppsConfig(filePath: string): AppsConfig {
   let raw: string;

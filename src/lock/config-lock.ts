@@ -62,6 +62,12 @@ interface LockMetadata {
  * acquisition means that should be unreachable, but guessing "infinitely old"
  * from unreadable metadata is what made the previous implementation steal live
  * locks, so it is worth never doing again.
+ *
+ * @example
+ * // input
+ * describeHolder('/repo/.vpsctl.lock')
+ * // output
+ * { metadata: { acquiredAt: 1717000000000, hostname: 'vps-1', command: 'apply' }, heldForMs: 4200 }
  */
 function describeHolder(lockPath: string): { metadata: LockMetadata | null; heldForMs: number } {
   let metadata: LockMetadata | null = null;
@@ -83,11 +89,26 @@ function describeHolder(lockPath: string): { metadata: LockMetadata | null; held
   }
 }
 
+/**
+ * @example
+ * // input
+ * sleepSync(500)
+ * // output
+ * undefined // side effect: blocks the current thread for 500ms
+ */
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-/** Creates the lock, or throws EEXIST if someone else holds it. */
+/**
+ * Creates the lock, or throws EEXIST if someone else holds it.
+ *
+ * @example
+ * // input
+ * tryAcquire('/repo/.vpsctl.lock', 'apply')
+ * // output
+ * true // lock acquired; false if another process already holds it
+ */
 function tryAcquire(lockPath: string, command: string): boolean {
   const metadata: LockMetadata = {
     acquiredAt: Date.now(),
@@ -117,6 +138,12 @@ function tryAcquire(lockPath: string, command: string): boolean {
  * Synchronous throughout: every command in this CLI is a linear sequence of
  * blocking docker calls, and an async lock would add concurrency to a tool whose
  * entire purpose is preventing it.
+ *
+ * @example
+ * // input
+ * withConfigLock('/repo/.vpsctl.lock', 'apply', () => renderNginxConfig(config))
+ * // output
+ * Map { 'conf.d/http.conf' => '...', 'conf.d/web-ssl.conf' => '...' } // work()'s return value, after the lock is released
  */
 export function withConfigLock<T>(
   lockPath: string,

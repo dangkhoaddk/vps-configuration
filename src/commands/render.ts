@@ -4,7 +4,15 @@ import { renderNginxConfig } from '../render/render-nginx-config.js';
 import { loadRegistry } from '../registry/load-registry.js';
 import { repoPaths } from '../repo-paths.js';
 
-/** Writes rendered config to a local directory. Touches nothing else. */
+/**
+ * Writes rendered config to a local directory. Touches nothing else.
+ *
+ * @example
+ * // input
+ * { out: "./rendered" }
+ * // output
+ * 0 // output: side effect — writes "./rendered/conf.d/api.conf" etc. to disk, logging each path
+ */
 export function renderCommand(options: { out?: string }): number {
   const outDir = options.out ?? repoPaths.renderedOutput;
   const files = renderNginxConfig(loadRegistry());

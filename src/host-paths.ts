@@ -9,6 +9,12 @@ import { repoPaths } from './repo-paths.js';
  * silently rather than loudly.
  */
 
+/** Only the two directories nginx config is written to; certsRoot is not its concern. */
+export interface ManagedDirectories {
+  nginxConfDir: string;
+  snippetsDir: string;
+}
+
 /**
  * Translates a path inside this repo to its equivalent on the docker host.
  *
@@ -21,6 +27,12 @@ import { repoPaths } from './repo-paths.js';
  *
  * bin/vpsctl passes the host repo path in VPSCTL_HOST_REPO_DIR. Unset means
  * vpsctl is running directly on the host, where no translation is needed.
+ *
+ * @example
+ * // input (with VPSCTL_HOST_REPO_DIR=/home/deploy/vps-configuration and repoPaths.root=/app)
+ * hostPathForScratch('/app/.vpsctl-scratch/render-1')
+ * // output
+ * '/home/deploy/vps-configuration/.vpsctl-scratch/render-1'
  */
 export function hostPathForScratch(pathInsideRepo: string): string {
   const hostRepoDir = process.env['VPSCTL_HOST_REPO_DIR'];
@@ -40,11 +52,14 @@ export function hostPathForScratch(pathInsideRepo: string): string {
  * (`conf.d/...`, `snippets/...`) because that mirrors the layout inside the
  * container. On the host those two roots are separate directories, configured
  * independently, so the mapping happens here rather than in the renderer.
+ *
+ * @example
+ * // input
+ * hostPathFor('conf.d/web-ssl.conf', { nginxConfDir: '/srv/nginx/conf.d', snippetsDir: '/srv/nginx/snippets' })
+ * // output
+ * '/srv/nginx/conf.d/web-ssl.conf'
  */
-export function hostPathFor(
-  relativePath: string,
-  paths: { nginxConfDir: string; snippetsDir: string },
-): string {
+export function hostPathFor(relativePath: string, paths: ManagedDirectories): string {
   if (relativePath.startsWith('conf.d/')) {
     return join(paths.nginxConfDir, relativePath.slice('conf.d/'.length));
   }

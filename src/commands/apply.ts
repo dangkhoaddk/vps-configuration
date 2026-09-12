@@ -7,6 +7,11 @@ import { repoPaths } from '../repo-paths.js';
 import { loadRegistry } from '../registry/load-registry.js';
 import { planRender } from './plan-render.js';
 
+export interface ApplyOptions {
+  app?: string;
+  dryRun?: boolean;
+}
+
 /**
  * Render, guard, validate, write, reload.
  *
@@ -14,8 +19,14 @@ import { planRender } from './plan-render.js';
  * live config is overwritten, so a template bug fails the command instead of
  * taking three sites down. The deploy scripts this replaces wrote first and
  * tested afterwards.
+ *
+ * @example
+ * // input
+ * { app: "api", dryRun: false }
+ * // output
+ * 0 // config rendered, validated, written, and nginx reloaded
  */
-export function applyCommand(options: { app?: string; dryRun?: boolean }): number {
+export function applyCommand(options: ApplyOptions): number {
   // A dry run never writes, so it does not take the lock. It can therefore read
   // a half-applied state while a real apply is running: the report is advisory,
   // not a snapshot.
@@ -26,7 +37,17 @@ export function applyCommand(options: { app?: string; dryRun?: boolean }): numbe
   );
 }
 
-function runApply(options: { app?: string; dryRun?: boolean }): number {
+/**
+ * Does the actual render/validate/write/reload sequence, outside the lock so a
+ * dry run can call it directly.
+ *
+ * @example
+ * // input
+ * { app: "api", dryRun: true }
+ * // output
+ * 0 // dry run: logs the planned diff; nothing written, nginx not reloaded
+ */
+function runApply(options: ApplyOptions): number {
   const config = loadRegistry();
   const dryRun = options.dryRun ?? false;
 

@@ -23,6 +23,23 @@ export type RenderDecision =
   | { ok: false; error: string; warnings: string[] }
   | { ok: true; files: Map<string, string>; warnings: string[] };
 
+/**
+ * @example
+ * // input
+ * config,
+ * {
+ *   resolvable: [{ name: "api", domains: ["api.balispacafe.com"], primaryDomain: "api.balispacafe.com", ... }],
+ *   skipped: [],
+ *   monitor: true,
+ * },
+ * undefined
+ * // output
+ * {
+ *   ok: true,
+ *   warnings: [],
+ *   files: Map { "conf.d/api.conf" => "server {\n  ...\n}\n" },
+ * }
+ */
 export function planRender(
   config: AppsConfig,
   availability: UpstreamAvailability,

@@ -55,6 +55,16 @@ export interface ValidationResult {
   output: string;
 }
 
+/**
+ * Writes rendered files into a fresh temp directory tree under repoPaths.scratch,
+ * creating conf.d and snippets even when nothing was rendered into them.
+ *
+ * @example
+ * // input
+ * writeToScratchTree(new Map([['conf.d/api-ssl.conf', 'server {\n  listen 443 ssl;\n}\n']]))
+ * // output
+ * '/repo/.scratch/validate-Ab12Cd' // temp dir containing conf.d/api-ssl.conf and an empty snippets/
+ */
 function writeToScratchTree(files: ReadonlyMap<string, string>): string {
   mkdirSync(repoPaths.scratch, { recursive: true });
   const root = mkdtempSync(join(repoPaths.scratch, 'validate-'));
@@ -72,6 +82,20 @@ function writeToScratchTree(files: ReadonlyMap<string, string>): string {
   return root;
 }
 
+/**
+ * Runs nginx over the rendered config in a throwaway container and reports
+ * whether it loaded cleanly, including whether the rendered files actually
+ * reached nginx.
+ *
+ * @example
+ * // input
+ * validateRenderedConfig(
+ *   { apps: [{ upstream: { container: 'spa-api' }, primaryDomain: 'api.example.com' }], monitor: { container: 'netdata' } } as AppsConfig,
+ *   new Map([['conf.d/api-ssl.conf', 'server {\n  listen 443 ssl;\n}\n']]),
+ * )
+ * // output
+ * { ok: true, output: 'configuration file /etc/nginx/nginx.conf test is successful' }
+ */
 export function validateRenderedConfig(
   config: AppsConfig,
   files: ReadonlyMap<string, string>,
@@ -129,7 +153,18 @@ export function validateRenderedConfig(
   }
 }
 
-/** Rendered files that do not appear in nginx's own dump of what it loaded. */
+/**
+ * Rendered files that do not appear in nginx's own dump of what it loaded.
+ *
+ * @example
+ * // input
+ * filesNotLoaded(
+ *   new Map([['conf.d/api-ssl.conf', 'server {}\n']]),
+ *   '# configuration file /etc/nginx/nginx.conf:\n...\n',
+ * )
+ * // output
+ * ['conf.d/api-ssl.conf']
+ */
 function filesNotLoaded(files: ReadonlyMap<string, string>, dump: string): string[] {
   const loaded = parseNginxDump(dump);
   return [...files.keys()].filter((relativePath) => {
@@ -140,6 +175,15 @@ function filesNotLoaded(files: ReadonlyMap<string, string>, dump: string): strin
   });
 }
 
+/**
+ * Joins stdout and stderr into one trimmed string, dropping whichever is blank.
+ *
+ * @example
+ * // input
+ * joinOutput('configuration file /etc/nginx/nginx.conf test is successful\n', '')
+ * // output
+ * 'configuration file /etc/nginx/nginx.conf test is successful'
+ */
 function joinOutput(stdout: string, stderr: string): string {
   return [stdout, stderr].filter((s) => s.trim().length > 0).join('\n').trim();
 }

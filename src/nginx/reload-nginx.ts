@@ -29,11 +29,29 @@ export interface ReloadResult {
   detail: string;
 }
 
+/**
+ * Whether the named container is currently running.
+ *
+ * @example
+ * // input
+ * isContainerRunning('edge-nginx')
+ * // output
+ * true
+ */
 function isContainerRunning(name: string): boolean {
   const result = runDocker(['inspect', '-f', '{{.State.Running}}', name]);
   return result.ok && result.stdout.trim() === 'true';
 }
 
+/**
+ * Force-recreates the nginx service via compose, tagging the result with why.
+ *
+ * @example
+ * // input
+ * recreate('edge-nginx is not running')
+ * // output
+ * { outcome: 'recreated', detail: 'edge-nginx is not running; recreated the nginx container' }
+ */
 function recreate(reason: string): ReloadResult {
   const result = runDocker([...composeArgs(), 'up', '-d', 'nginx', '--force-recreate']);
 
@@ -42,6 +60,16 @@ function recreate(reason: string): ReloadResult {
     : { outcome: 'failed', detail: `${reason}; recreate also failed: ${result.stderr.trim()}` };
 }
 
+/**
+ * Reloads the running nginx container, falling back to a recreate or a
+ * reported failure depending on which of the three states it finds.
+ *
+ * @example
+ * // input
+ * reloadNginx({ nginxContainer: 'edge-nginx', ... } as AppsConfig)
+ * // output
+ * { outcome: 'reloaded', detail: 'nginx reloaded' }
+ */
 export function reloadNginx(config: AppsConfig): ReloadResult {
   if (!isContainerRunning(config.nginxContainer)) {
     return recreate(`${config.nginxContainer} is not running`);

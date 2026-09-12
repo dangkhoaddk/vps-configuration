@@ -10,6 +10,15 @@
 
 const FILE_HEADER = /^# configuration file (.+):$/;
 
+/**
+ * Splits an `nginx -T` dump into a map of absolute config path to file content.
+ *
+ * @example
+ * // input
+ * '# configuration file /etc/nginx/conf.d/api-ssl.conf:\nserver {\n  listen 443 ssl;\n}\n'
+ * // output
+ * Map { '/etc/nginx/conf.d/api-ssl.conf' => 'server {\n  listen 443 ssl;\n}\n' }
+ */
 export function parseNginxDump(dump: string): Map<string, string> {
   const files = new Map<string, string>();
 
@@ -47,6 +56,15 @@ export function parseNginxDump(dump: string): Map<string, string> {
  * The renderer works in relative paths (`conf.d/api-ssl.conf`) while a dump
  * carries absolute container paths (`/etc/nginx/conf.d/api-ssl.conf`). Matching
  * on the suffix keeps the renderer independent of where nginx mounts things.
+ *
+ * @example
+ * // input
+ * findDumpedFile(
+ *   new Map([['/etc/nginx/conf.d/api-ssl.conf', 'server {\n  listen 443 ssl;\n}\n']]),
+ *   'conf.d/api-ssl.conf',
+ * )
+ * // output
+ * 'server {\n  listen 443 ssl;\n}\n'
  */
 export function findDumpedFile(
   files: Map<string, string>,

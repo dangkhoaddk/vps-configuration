@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { hostPathFor } from '../host-paths.js';
+import { hostPathFor, type ManagedDirectories } from '../host-paths.js';
 
 /**
  * Writes rendered config to the host and removes files this repo no longer owns.
@@ -27,10 +27,29 @@ export interface SyncPlan {
   removed: string[];
 }
 
+/**
+ * Whether a sync plan would touch anything on disk.
+ *
+ * @example
+ * // input
+ * isNoOp({ created: [], updated: [], unchanged: ['conf.d/api-ssl.conf'], removed: [] })
+ * // output
+ * true
+ */
 export function isNoOp(plan: SyncPlan): boolean {
   return plan.created.length === 0 && plan.updated.length === 0 && plan.removed.length === 0;
 }
 
+/**
+ * The `.conf` files this repo owns in a directory, or an empty list if the
+ * directory does not exist yet.
+ *
+ * @example
+ * // input
+ * ownedConfFiles('/etc/nginx/conf.d')
+ * // output
+ * ['api-ssl.conf', 'admin-ssl.conf']
+ */
 function ownedConfFiles(directory: string): string[] {
   if (!existsSync(directory)) return [];
   return readdirSync(directory).filter((name) => name.endsWith('.conf'));
@@ -41,12 +60,19 @@ function ownedConfFiles(directory: string): string[] {
  *
  * With `dryRun`, nothing is touched; the returned plan is what *would* happen.
  */
-/** Only the two directories this module manages; certsRoot is not its concern. */
-export interface ManagedDirectories {
-  nginxConfDir: string;
-  snippetsDir: string;
-}
-
+/**
+ * Compares rendered output against what is on disk and, unless `dryRun`,
+ * writes the differences and prunes `.conf` files the renderer no longer owns.
+ *
+ * @example
+ * // input
+ * syncConfigFiles(
+ *   new Map([['conf.d/api-ssl.conf', 'server {\n  listen 443 ssl;\n}\n']]),
+ *   { nginxConfDir: '/etc/nginx/conf.d', snippetsDir: '/etc/nginx/snippets' },
+ * )
+ * // output
+ * { created: [], updated: ['conf.d/api-ssl.conf'], unchanged: [], removed: [] }
+ */
 export function syncConfigFiles(
   files: ReadonlyMap<string, string>,
   paths: ManagedDirectories,
