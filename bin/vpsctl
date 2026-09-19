@@ -12,10 +12,15 @@ set -eu
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 IMAGE="ghcr.io/dangkhoaddk/vps-configuration:latest"
 ENV_FILE="$REPO_DIR/stack/.env"
+ENV_EXAMPLE="$REPO_DIR/stack/.env.example"
 
 if [ ! -f "$ENV_FILE" ]; then
-  echo "$ENV_FILE is missing. Copy stack/.env.example to stack/.env and fill it in." >&2
-  exit 1
+  if [ ! -f "$ENV_EXAMPLE" ]; then
+    echo "$ENV_FILE is missing, and $ENV_EXAMPLE does not exist to copy from." >&2
+    exit 1
+  fi
+  echo "$ENV_FILE is missing. Creating it from stack/.env.example." >&2
+  cp "$ENV_EXAMPLE" "$ENV_FILE"
 fi
 
 # shellcheck disable=SC1090
