@@ -16,14 +16,14 @@ on:
   push:
     branches: [main]
     paths:
-      - 'apps.yml'
-      - 'templates/**'
-      - 'src/**'
-      - 'stack/compose.edge.yml'
+      - "apps.yml"
+      - "templates/**"
+      - "src/**"
+      - "stack/compose.edge.yml"
   workflow_dispatch:
     inputs:
       app:
-        description: 'Limit to one app (blank applies all)'
+        description: "Limit to one app (blank applies all)"
         required: false
         type: string
 

@@ -101,7 +101,39 @@ function sleepSync(ms: number): void {
 }
 
 /**
- * Creates the lock, or throws EEXIST if someone else holds it.
+ * Creates `path` with `content` already in place, or reports that it already
+ * exists. Never observable as an empty or partial file: `path` either has its
+ * final content the instant it appears, or this process's write never
+ * happened at that path at all.
+ *
+ * Writes to a throwaway sibling file first, then hard-links that file to
+ * `path`. `link()` is what makes this atomic: it either succeeds (both names
+ * now point at the same, fully-written content) or fails with EEXIST (the
+ * path was already taken), with nothing in between.
+ *
+ * @example
+ * // input
+ * createFileAtomically('/repo/.vpsctl.lock', '{"command":"apply"}')
+ * // output
+ * true // created; false if the path already existed
+ */
+function createFileAtomically(path: string, content: string): boolean {
+  const staging = `${path}.staging.${process.pid}.${Math.random().toString(36).slice(2)}`;
+
+  writeFileSync(staging, content, 'utf8');
+  try {
+    linkSync(staging, path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    throw error;
+  } finally {
+    rmSync(staging, { force: true });
+  }
+}
+
+/**
+ * Creates the lock, or reports that someone else holds it.
  *
  * @example
  * // input
@@ -115,19 +147,51 @@ function tryAcquire(lockPath: string, command: string): boolean {
     hostname: process.env['HOSTNAME'] ?? 'unknown',
     command,
   };
-  const staging = `${lockPath}.staging.${process.pid}.${Math.random().toString(36).slice(2)}`;
+  return createFileAtomically(lockPath, JSON.stringify(metadata, null, 2));
+}
 
-  writeFileSync(staging, JSON.stringify(metadata, null, 2), 'utf8');
-  try {
-    // Atomic: either this process creates the lock complete with its metadata,
-    // or the path is already taken.
-    linkSync(staging, lockPath);
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
-    throw error;
-  } finally {
-    rmSync(staging, { force: true });
+/**
+ * Blocks until the lock at `lockPath` is acquired, taking over a stale one or
+ * throwing once `timeoutMs` has passed.
+ *
+ * Pulled out of `withConfigLock` so that function reads as a straight line:
+ * get the lock, then do the work, then release it.
+ */
+function acquireOrThrow(
+  lockPath: string,
+  command: string,
+  timeoutMs: number,
+  staleMs: number,
+): void {
+  const deadline = Date.now() + timeoutMs;
+
+  for (;;) {
+    if (tryAcquire(lockPath, command)) return;
+
+    const { metadata, heldForMs } = describeHolder(lockPath);
+
+    if (heldForMs > staleMs) {
+      // The holder is presumed dead rather than merely slow: nothing else
+      // would ever release this lock, so every future apply/cert-issue would
+      // otherwise block until a human noticed and deleted it by hand.
+      console.warn(
+        `! taking a lock held for ${Math.round(heldForMs / 1000)}s by ` +
+          `${metadata?.command ?? 'an unknown command'}; assuming the holder died`,
+      );
+      rmSync(lockPath, { force: true });
+      continue;
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Timed out after ${Math.round(timeoutMs / 1000)}s waiting for ${lockPath}.\n` +
+          `  Held by: ${metadata?.command ?? 'unknown'} on ${metadata?.hostname ?? 'unknown host'}` +
+          ` for ${Math.round(heldForMs / 1000)}s\n` +
+          `  Another deploy is probably in progress. If nothing is running, delete the file.`,
+      );
+    }
+
+    sleepSync(POLL_INTERVAL_MS);
   }
 }
 
@@ -153,33 +217,8 @@ export function withConfigLock<T>(
 ): T {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const staleMs = options.staleMs ?? DEFAULT_STALE_MS;
-  const deadline = Date.now() + timeoutMs;
 
-  for (;;) {
-    if (tryAcquire(lockPath, command)) break;
-
-    const { metadata, heldForMs } = describeHolder(lockPath);
-
-    if (heldForMs > staleMs) {
-      console.warn(
-        `! taking a lock held for ${Math.round(heldForMs / 1000)}s by ` +
-          `${metadata?.command ?? 'an unknown command'}; assuming the holder died`,
-      );
-      rmSync(lockPath, { force: true });
-      continue;
-    }
-
-    if (Date.now() >= deadline) {
-      throw new Error(
-        `Timed out after ${Math.round(timeoutMs / 1000)}s waiting for ${lockPath}.\n` +
-          `  Held by: ${metadata?.command ?? 'unknown'} on ${metadata?.hostname ?? 'unknown host'}` +
-          ` for ${Math.round(heldForMs / 1000)}s\n` +
-          `  Another deploy is probably in progress. If nothing is running, delete the file.`,
-      );
-    }
-
-    sleepSync(POLL_INTERVAL_MS);
-  }
+  acquireOrThrow(lockPath, command, timeoutMs, staleMs);
 
   const release = (): void => {
     try {
