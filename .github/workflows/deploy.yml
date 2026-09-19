@@ -78,8 +78,8 @@ jobs:
               set --
             fi
 
-            # bin/vpsctl rebuilds dist/ when src/ is newer, so a plain checkout
-            # is enough here.
+            # bin/vpsctl pulls its own image from GHCR on every run, so a
+            # plain checkout is enough here — no local build step.
             #
             # Dry run first, so the run log records the diff even on success.
             ./bin/vpsctl apply "$@" --dry-run

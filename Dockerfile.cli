@@ -1,12 +1,36 @@
 # Runtime for vpsctl, so the VPS needs only docker and git.
 #
-# The image carries the docker CLI, because vpsctl works by talking to the host's
-# docker daemon through a mounted socket. Pinned rather than floating: this is
-# the tool that rewrites production routing, and it should not change underneath
-# an operator without a commit.
+# Built and pushed to GHCR in CI (see .github/workflows/ci.yml), so a deploy is
+# `docker pull` + `docker run`, never a live `pnpm install` against the
+# registry. That's what an unpinned pnpm hit
+# (ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION) when it ran on every deploy.
+#
+# dist/ and node_modules live at /app, not /repo. bin/vpsctl bind-mounts the
+# live host checkout at /repo for apps.yml/templates/etc., and a bind mount
+# replaces whatever the image baked in at that path — so the compiled code has
+# to sit somewhere the mount never touches. VPSCTL_REPO_ROOT (see
+# src/repo-paths.ts) tells the compiled code to read repo paths from /repo
+# instead of next to itself.
+FROM node:22-alpine AS build
+
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile
+COPY tsconfig.json tsconfig.build.json ./
+COPY src ./src
+RUN pnpm run build && pnpm prune --prod
+
 FROM node:22-alpine
 
+# The docker CLI, because vpsctl works by talking to the host's docker daemon
+# through a mounted socket. Pinned rather than floating: this is the tool that
+# rewrites production routing, and it should not change underneath an
+# operator without a commit.
 RUN apk add --no-cache docker-cli docker-cli-compose
 
-WORKDIR /repo
-ENTRYPOINT ["node", "dist/cli.js"]
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY package.json ./
+
+ENTRYPOINT ["node", "/app/dist/cli.js"]

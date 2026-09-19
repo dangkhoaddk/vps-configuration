@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import Handlebars from 'handlebars';
+import { repoPaths } from '../repo-paths.js';
 import type { AppConfig, AppsConfig } from '../registry/apps-schema.js';
 
 /**
@@ -12,7 +12,7 @@ import type { AppConfig, AppsConfig } from '../registry/apps-schema.js';
  * hermetic and can run in CI with nothing installed.
  */
 
-const TEMPLATE_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../templates');
+const TEMPLATE_DIR = repoPaths.templates;
 
 /**
  * Paths *inside* the nginx container. nginx includes conf.d/*.conf at http level

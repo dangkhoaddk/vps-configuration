@@ -4,8 +4,14 @@ import { fileURLToPath } from 'node:url';
 /**
  * Locations inside this repo. Resolved from the compiled module rather than the
  * working directory, so `vpsctl` behaves the same wherever it is invoked from.
+ *
+ * VPSCTL_REPO_ROOT overrides this when the compiled code and the repo checkout
+ * live at different container paths — the GHCR image bakes dist/ and
+ * node_modules into /app, separate from the host repo checkout bind-mounted at
+ * /repo, so apps.yml/templates/etc. stay live without rebuilding the image.
  */
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const REPO_ROOT =
+  process.env['VPSCTL_REPO_ROOT'] ?? join(dirname(fileURLToPath(import.meta.url)), '..');
 
 export const repoPaths = {
   root: REPO_ROOT,

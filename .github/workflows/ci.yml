@@ -65,3 +65,31 @@ jobs:
             exit 1
           fi
           echo "apps.yml is clean"
+
+  # Builds the image bin/vpsctl pulls on every deploy, so a deploy is a docker
+  # pull against something CI already validated, not a live `pnpm install`
+  # against the npm registry (see Dockerfile.cli). Only runs on main: a PR
+  # build proves nothing this job doesn't already re-check on push, and forked
+  # PRs don't get GHCR write access anyway.
+  build-and-push:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile.cli
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/vps-configuration:latest
