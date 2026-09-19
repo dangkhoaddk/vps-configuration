@@ -1,0 +1,82 @@
+# Registry of every site this VPS serves.
+#
+# This is the only file you edit to add an app. See docs/adding-an-app.md.
+#
+# PROVISIONAL until the phase 03 parity gate passes against the baseline
+# captured from the live VPS. Fields here were derived by reading the three
+# deploy.sh heredocs; the live config is the authority and may differ.
+#
+# No secrets. Values that must stay private are written as ${ENV_VAR} and
+# resolved from the environment at load time.
+
+network: ext_network
+nginxContainer: nginx_proxy
+
+paths:
+  # Round one deliberately points at the spa-api checkout, so that moving
+  # container ownership (phase 09) does not also move certificate location.
+  # One variable at a time. Moving these is a round-two item, tracked in
+  # docs/known-issues.md as defect #2.
+  nginxConfDir: ${NGINX_CONF_DIR}
+  snippetsDir: ${SNIPPETS_DIR}
+  certsRoot: ${CERTS_ROOT}
+
+acme:
+  email: ${ACME_EMAIL}
+  # Path inside the nginx and certbot containers, not on the host.
+  webroot: /var/www/certbot
+  # Whose domains go in the port-80 ACME server block. Every app belongs here, so
+  # that renewal never depends on this being nginx's default server: it is the
+  # only `listen 80` block today, and a second one added ahead of it would
+  # otherwise break challenges for any app missing from this list.
+  httpServerNameApps: [api, web, admin]
+
+monitor:
+  container: monitor
+  port: 19999
+
+apps:
+  - name: api
+    domains:
+      - api.balispacafe.com
+      - www.api.balispacafe.com
+    primaryDomain: api.balispacafe.com
+    upstream:
+      name: nestjs_backend
+      container: spa-api
+      port: 3000
+    frameOptions: DENY
+    websockets: true
+    rateLimit:
+      zone: global_limit
+      burst: 20
+      nodelay: true
+    includeMonitor: true
+
+  - name: web
+    domains:
+      - balispacafe.com
+      - www.balispacafe.com
+    primaryDomain: balispacafe.com
+    upstream:
+      name: web_frontend_ver2
+      container: bali-spa-cafe
+      port: 3000
+    frameOptions: DENY
+    websockets: true
+    clientMaxBodySize: 5m
+    includeMonitor: true
+
+  - name: admin
+    domains:
+      - admin.balispacafe.com
+      - www.admin.balispacafe.com
+    primaryDomain: admin.balispacafe.com
+    upstream:
+      name: admin_frontend
+      container: spa-admin
+      port: 3000
+    # Parity: admin differs from the other two. Not a mistake, not normalized.
+    frameOptions: SAMEORIGIN
+    websockets: false
+    includeMonitor: false

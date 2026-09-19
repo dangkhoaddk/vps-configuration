@@ -1,0 +1,75 @@
+#!/bin/sh
+# Runs vpsctl in a container, so the VPS needs only docker and git.
+#
+# The docker socket is mounted because vpsctl's whole job is driving docker:
+# resolving upstreams on the network, running the nginx validator, reloading the
+# proxy.
+#
+# THAT MOUNT IS ROOT-EQUIVALENT ON THE HOST. Anyone who can run this script can
+# run any container, including one that mounts /. Restrict it accordingly.
+set -eu
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+IMAGE="vpsctl:local"
+ENV_FILE="$REPO_DIR/stack/.env"
+
+# dist/ is not committed, and `git pull` updates src/ without rebuilding it. An
+# app pipeline doing `git pull && vpsctl apply` would otherwise run last week's
+# renderer against this week's apps.yml, silently. Rebuild when the sources are
+# newer than the build output.
+needs_build=0
+if [ ! -f "$REPO_DIR/dist/cli.js" ]; then
+  needs_build=1
+elif [ -n "$(find "$REPO_DIR/src" "$REPO_DIR/package.json" "$REPO_DIR/tsconfig.build.json" \
+             -newer "$REPO_DIR/dist/cli.js" -print -quit 2>/dev/null)" ]; then
+  needs_build=1
+fi
+
+if [ "$needs_build" -eq 1 ]; then
+  echo "Building vpsctl from source..." >&2
+  docker run --rm -v "$REPO_DIR":/repo -w /repo node:22-alpine \
+    sh -c 'corepack enable && pnpm install --frozen-lockfile && pnpm run build' >&2
+fi
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "$ENV_FILE is missing. Copy stack/.env.example to stack/.env and fill it in." >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+set -a; . "$ENV_FILE"; set +a
+
+# The CLI reads and writes these host directories. They are mounted at their own
+# paths so nothing has to be translated: a path means the same thing inside the
+# container and out.
+#
+# They must already exist. Docker creates a missing bind-mount source as an empty
+# directory rather than failing, and an empty nginx config directory is a proxy
+# that starts and serves nothing.
+for dir in "$NGINX_CONF_DIR" "$SNIPPETS_DIR" "$CERTS_ROOT"; do
+  if [ ! -d "$dir" ]; then
+    echo "Directory does not exist: $dir" >&2
+    echo "  Create it, or fix the path in $ENV_FILE." >&2
+    echo "  Docker would otherwise create it empty, leaving nginx serving nothing." >&2
+    exit 1
+  fi
+done
+
+# Rebuilt only when absent. `docker build` on every invocation would add seconds
+# to a command that runs in the deploy path.
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "Building $IMAGE..." >&2
+  docker build -q -f "$REPO_DIR/Dockerfile.cli" -t "$IMAGE" "$REPO_DIR" >/dev/null
+fi
+
+# VPSCTL_HOST_REPO_DIR lets the containerised CLI translate its own scratch paths
+# back to host paths when it builds bind-mount sources for other containers.
+exec docker run --rm -i \
+  -v "$REPO_DIR":/repo \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "$NGINX_CONF_DIR":"$NGINX_CONF_DIR" \
+  -v "$SNIPPETS_DIR":"$SNIPPETS_DIR" \
+  -v "$CERTS_ROOT":"$CERTS_ROOT" \
+  -e VPSCTL_HOST_REPO_DIR="$REPO_DIR" \
+  -w /repo \
+  "$IMAGE" "$@"

@@ -1,0 +1,25 @@
+{{! http-level globals, plus the netdata upstream, which belongs to no app. }}
+{{! Rendered to conf.d/upstreams.conf. App upstreams live in their site files. }}
+# --- 1. Rate Limiting Definitions ---
+limit_req_zone $binary_remote_addr zone=global_limit:10m rate=10r/s;
+
+# --- 2. Optimized Timeouts ---
+client_body_timeout 10s;
+client_header_timeout 10s;
+send_timeout 10s;
+# Global default. An app may override it per server block via clientMaxBodySize.
+client_max_body_size 1M;
+{{#if monitor}}
+
+upstream netdata {
+    server {{monitor.container}}:{{monitor.port}};
+    keepalive 64;
+}
+{{/if}}
+
+# nginx resolves every upstream hostname at config-load time, even for upstreams
+# no server block references. An upstream whose container is absent from the
+# shared network therefore stops nginx from starting at all: it exits before
+# writing /run/nginx.pid, and the next reload fails with `invalid PID number ""`.
+# vpsctl enforces this by checking container resolvability before it renders a
+# block. See docs/architecture.md.

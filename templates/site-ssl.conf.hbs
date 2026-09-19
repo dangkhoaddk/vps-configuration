@@ -1,0 +1,56 @@
+{{! One HTTPS server block per app, plus the upstream it proxies to. }}
+{{! Rendered to conf.d/<name>-ssl.conf. }}
+{{! The upstream lives here rather than in upstreams.conf so that an app whose }}
+{{! container is absent takes its upstream with it when this file is not }}
+{{! rendered. An upstream naming a container that does not resolve stops nginx }}
+{{! from starting at all, so keeping the two together removes a way to get that }}
+{{! wrong. See docs/architecture.md. }}
+upstream {{upstream.name}} {
+    server {{upstream.container}}:{{upstream.port}};
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name {{serverName}};
+
+    ssl_certificate {{certDir}}/fullchain.pem;
+    ssl_certificate_key {{certDir}}/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+{{#if clientMaxBodySize}}
+
+    client_max_body_size {{clientMaxBodySize}};
+{{/if}}
+
+    # Security Headers
+    add_header X-Frame-Options "{{frameOptions}}" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+{{#if includeMonitor}}
+
+    # Netdata dashboard for this VPS. The wildcard means nginx still starts when
+    # the snippet has not been written yet.
+    include {{snippetsMountPath}}/monitor*.conf;
+{{/if}}
+
+    location / {
+        proxy_pass http://{{upstream.name}};
+        proxy_http_version 1.1;
+{{#if websockets}}
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+{{/if}}
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+{{#if rateLimit}}
+
+        limit_req zone={{rateLimit.zone}} burst={{rateLimit.burst}}{{#if rateLimit.nodelay}} nodelay{{/if}};
+{{/if}}
+    }
+}
