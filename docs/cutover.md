@@ -10,20 +10,27 @@ behind a downtime window.
 | **A** | Who writes the config | none | per app, instantly | [A. Config authorship](#a-config-authorship) |
 | **B** | Who owns the containers | ~30s, all sites | yes, two commands | [B. Container ownership](#b-container-ownership) |
 
-## Blocked until the baseline is captured
+## The baseline is captured
 
-The parity gate currently compares against config reconstructed from the deploy
-scripts, not from the running server. Before any cutover:
+`baseline/nginx-T.baseline.conf` holds what the running proxy actually loaded,
+and the parity gate runs against it. It found one real drift, admin's upstream
+port, now fixed in `apps.yml`. See `baseline/README.md`.
+
+## Before any apply: check `stack/.env` on the VPS
+
+`bin/vpsctl` creates `stack/.env` from `stack/.env.example` when it is missing, so
+a checkout always has *a* `.env` — not necessarily a correct one. The paths there
+decide which directory `apply` writes into, and a wrong one fails silently: the
+render succeeds, nginx never sees it, and the deploy reports success.
 
 ```sh
-docker exec nginx_proxy nginx -T > nginx-T.baseline.conf
+set -a; . stack/.env; set +a
+ls -d "$NGINX_CONF_DIR" "$SNIPPETS_DIR" "$CERTS_ROOT"
+docker inspect nginx_proxy --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{println}}{{end}}'
 ```
 
-Commit it, then confirm `./bin/vpsctl diff --live` is clean. Any difference is real
-drift between the scripts and production and must be resolved first. Live wins.
-
-Do not start without this. See `baseline/README.md` for two known reasons the two
-might differ.
+`NGINX_CONF_DIR`, `SNIPPETS_DIR` and `CERTS_ROOT` must match what nginx mounts.
+If they do not, nothing below is doing what it appears to.
 
 ---
 
@@ -38,16 +45,36 @@ monitor snippet), and until it migrates, an api deploy keeps rewriting those
 underneath the migrated apps. Parity makes that safe, but the window is not fully
 closed until api moves.
 
+### What `--app` does, and does not do
+
+`apply --app <name>` renders and writes **every** file, not just that app's. All
+apps share one config directory, so rendering a subset would leave the others'
+files to be pruned and silently drop their routing. The flag only decides whose
+absence is fatal: the named app must resolve, or the command fails rather than
+reporting a deploy that changed no routing.
+
+Two consequences for what follows:
+
+- The **first** apply, whichever app triggers it, converts the whole directory.
+  The per-app order below still limits which pipeline runs first, but it does not
+  stage the config change app by app.
+- That first apply is therefore **not** a no-op. It writes the three deliberate
+  divergences in [parity-exceptions.md](parity-exceptions.md): admin's domains
+  into `http.conf`, and `booking_limit` and `nestjs_backend` out of
+  `upstreams.conf`. All three are argued behaviorally inert and are covered by
+  `vpsctl validate`.
+
 ### Per app
 
-**1. Verify it is a no-op.**
+**1. Check the diff is only what you expect.**
 
 ```sh
 ./bin/vpsctl apply --app <name> --dry-run
 ```
 
-Must report no changes. **If it reports a diff, stop.** Parity is not real, and
-nothing below is safe.
+For the first app, expect `~ conf.d/http.conf` and `~ conf.d/upstreams.conf` and
+nothing else. For every app after it, expect no changes. **Any other file, stop.**
+Parity is not real, and nothing below is safe.
 
 **2. Apply.**
 
@@ -55,7 +82,7 @@ nothing below is safe.
 ./bin/vpsctl apply --app <name>
 ```
 
-Expect "no changes; nginx not reloaded".
+The first app reloads nginx. The rest report "no changes; nginx not reloaded".
 
 **3. Verify live.**
 

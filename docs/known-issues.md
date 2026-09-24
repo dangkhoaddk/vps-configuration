@@ -12,7 +12,7 @@ disappears quietly; when something is fixed it moves rather than vanishes.
 | 2 | `/monitor/` is unauthenticated | HTTP basic auth or IP allowlist in `templates/snippets/monitor.conf` |
 | 3 | `SSH_KEY` stored in `vars`, not `secrets`, in two app repos | Move to `secrets`, update workflow refs, rotate the key |
 | 6 | Dead nginx config in spa-web | Delete `spa-web/deploy/nginx/bali-spa.conf` |
-| 7 | Cutover blocked on a live baseline capture | Capture `docker exec nginx_proxy nginx -T` from the VPS, resolve any diff |
+| 8 | `stack/.env.example` shipped paths that do not exist on the host | Fixed in the example; the VPS `.env` still needs correcting before any apply |
 
 ## Open
 
@@ -82,21 +82,41 @@ scope.
 
 *Fix:* delete the file.
 
-### 7. Cutover is blocked on a live baseline capture
+### 8. `stack/.env.example` pointed at paths that do not exist
 
-The parity gate currently runs against config reconstructed from the three deploy
-scripts, not from the running server. Two known reasons the two might differ are
-recorded in `baseline/README.md`.
+The example shipped `/home/deploy/spa-api/...`. There is no `deploy` user on the
+host, and `nginx_proxy` mounts `/root/spa-api/...`.
 
-Since three deliberate changes have now landed (`booking_limit`, admin's ACME
-domains, and `declareIn`), a live capture will differ from what this repo renders
-in those three places by design. They are tabulated in
-[parity-exceptions.md](parity-exceptions.md). Anything beyond them is real drift.
+That would be a typo, except `bin/vpsctl` creates `stack/.env` from the example
+when it is missing. The VPS checkout therefore already had the wrong paths, and
+an earlier run wrote a full set of rendered config into
+`/home/deploy/spa-api/nginx/conf`, a directory nothing reads. `CERTS_ROOT` there
+does not exist at all, so a `vpsctl up` would have had docker create it empty and
+brought nginx up with no certificates — the failure `stack/README.md` warns about,
+already latent on the host.
 
-*Fix:* capture `docker exec nginx_proxy nginx -T` from the VPS, commit it, and
-resolve any difference before cutover. Live wins.
+The example is fixed. Two things remain:
+
+*Fix:* correct `stack/.env` on the VPS before any apply, and delete the stray
+`/home/deploy` tree once it is confirmed unreferenced. Consider whether
+auto-creating `.env` from an example of absolute paths is worth its convenience,
+given the failure is silent.
 
 ## Fixed
+
+### Cutover was blocked on a live baseline capture
+
+`docker exec nginx_proxy nginx -T` is captured and committed to
+`baseline/nginx-T.baseline.conf`, and the parity gate now runs against it.
+
+It earned its keep immediately: `admin-ssl.conf` served `spa-admin:5001` while
+`apps.yml` declared `3000`. The deploy-script baseline agreed with `apps.yml`, so
+only the live capture could have found it, and rendering would have 502'd the
+admin site on the first apply.
+
+The three deliberate divergences are applied on top of the unedited capture in
+`tests/accepted-divergences.ts` rather than edited into it, so the file stays
+evidence rather than an artifact of making tests pass.
 
 ### The port-80 ACME block omitted admin's domains
 

@@ -58,13 +58,23 @@ longer reproduces the deploy scripts byte for byte.
 | admin added to `acme.httpServerNameApps` | `http.conf` `server_name` gains admin's two domains | None today. That block is the sole `listen 80` server, so it already caught admin's challenges as nginx's default |
 | `declareIn` removed | `nestjs_backend` moves from `upstreams.conf` into `api-ssl.conf` | None. nginx resolves upstreams after parsing all of `conf.d`, verified by `vpsctl validate` |
 
-**Read this before comparing against a live capture.** These three are expected
-differences between what the VPS currently serves and what this repo now
-renders. Anything beyond them is real drift.
+**These three are the expected differences** between what the VPS currently
+serves and what this repo now renders. Anything beyond them is real drift.
 
-## Still outstanding
+They are encoded, one entry each, in `tests/accepted-divergences.ts`, so the gate
+compares against the unedited live capture and still passes. Adding a row here
+means adding an entry there, in the same pull request.
 
-The baseline is currently derived from the three deploy scripts, not from the
-running server. Until `nginx -T` is captured from the VPS, any drift between what
-the scripts write and what nginx actually loaded is unknown. See
-`baseline/README.md`. **Cutover is blocked on that capture.**
+## Real drift the live capture found
+
+Not an exception. Recorded because the next person will want to know what the
+capture was worth.
+
+| Drift | Resolution |
+|---|---|
+| `admin-ssl.conf` served `spa-admin:5001`; `apps.yml` declared port `3000` | `apps.yml` corrected to `5001`. Live wins |
+
+The admin container sets `PORT=5001` and serves from nginx. Rendering port `3000`
+would have passed `nginx -t` — the hostname resolves either way — and 502'd the
+admin site on the first apply. The deploy-script baseline could not have caught
+it, because the script and the registry carried the same wrong number.

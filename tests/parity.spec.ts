@@ -6,6 +6,7 @@ import { loadAppsConfig } from '../src/registry/load-apps-config.js';
 import { renderNginxConfig } from '../src/render/render-nginx-config.js';
 import { normalizeNginxConfig } from '../src/compare/normalize-nginx-config.js';
 import { findDumpedFile, parseNginxDump } from '../src/compare/parse-nginx-dump.js';
+import { applyAcceptedDivergences } from './accepted-divergences.js';
 
 /**
  * The acceptance criterion for the whole extraction: rendering apps.yml must
@@ -39,18 +40,33 @@ const liveDump = existsSync(LIVE_CAPTURE)
   ? parseNginxDump(readFileSync(LIVE_CAPTURE, 'utf8'))
   : null;
 
-/** What the authoritative source says this file should contain. */
+/**
+ * What the authoritative source says this file should contain, normalized and
+ * ready to compare.
+ *
+ * Against the live capture, the deliberate divergences recorded in
+ * docs/parity-exceptions.md are applied on top. The capture itself stays exactly
+ * as `nginx -T` emitted it; see tests/accepted-divergences.ts for why the
+ * patches live there rather than in the baseline file.
+ */
 function baselineFor(path: string): string | undefined {
-  if (liveDump !== null) return findDumpedFile(liveDump, path);
+  if (liveDump !== null) {
+    const dumped = findDumpedFile(liveDump, path);
+    if (dumped === undefined) return undefined;
+    return applyAcceptedDivergences(path, normalizeNginxConfig(dumped));
+  }
 
   const fromScripts = join(BASELINE_DIR, path);
-  return existsSync(fromScripts) ? readFileSync(fromScripts, 'utf8') : undefined;
+  return existsSync(fromScripts) ? normalizeNginxConfig(readFileSync(fromScripts, 'utf8')) : undefined;
 }
 
 const ENV = {
-  NGINX_CONF_DIR: '/home/deploy/spa-api/nginx/conf',
-  SNIPPETS_DIR: '/home/deploy/spa-api/nginx/snippets',
-  CERTS_ROOT: '/home/deploy/spa-api/certbot',
+  // Where the running nginx actually reads from. Never rendered into config,
+  // which uses the container-side /etc/letsencrypt paths, but kept truthful so
+  // the fixture cannot teach anyone a path that does not exist on the host.
+  NGINX_CONF_DIR: '/root/spa-api/nginx/conf',
+  SNIPPETS_DIR: '/root/spa-api/nginx/snippets',
+  CERTS_ROOT: '/root/spa-api/certbot',
   // Arbitrary: acme.email is used only by `cert issue`, never rendered into config.
   ACME_EMAIL: 'ops@example.com',
 };
@@ -78,7 +94,7 @@ describe(`rendered config matches the baseline (${liveDump ? 'live capture' : 'd
 
     const expected = baselineFor(path);
     expect(expected, `no baseline for ${path}`).toBeDefined();
-    expect(normalizeNginxConfig(actual!)).toBe(normalizeNginxConfig(expected!));
+    expect(normalizeNginxConfig(actual!)).toBe(expected!);
   });
 
   it('renders exactly the owned files, no more', () => {
@@ -100,7 +116,7 @@ describe('the parity gate has teeth', () => {
     const actual = renderNginxConfig(tampered).get('conf.d/admin-ssl.conf')!;
     const expected = baselineFor('conf.d/admin-ssl.conf')!;
 
-    expect(normalizeNginxConfig(actual)).not.toBe(normalizeNginxConfig(expected));
+    expect(normalizeNginxConfig(actual)).not.toBe(expected);
   });
 
   it('fails when websocket headers are dropped', () => {
@@ -114,7 +130,7 @@ describe('the parity gate has teeth', () => {
     const actual = renderNginxConfig(tampered).get('conf.d/web-ssl.conf')!;
     const expected = baselineFor('conf.d/web-ssl.conf')!;
 
-    expect(normalizeNginxConfig(actual)).not.toBe(normalizeNginxConfig(expected));
+    expect(normalizeNginxConfig(actual)).not.toBe(expected);
   });
 
   it('fails when the rate limit is dropped', () => {
@@ -130,7 +146,7 @@ describe('the parity gate has teeth', () => {
     const actual = renderNginxConfig(tampered).get('conf.d/api-ssl.conf')!;
     const expected = baselineFor('conf.d/api-ssl.conf')!;
 
-    expect(normalizeNginxConfig(actual)).not.toBe(normalizeNginxConfig(expected));
+    expect(normalizeNginxConfig(actual)).not.toBe(expected);
   });
 });
 
@@ -176,9 +192,7 @@ describe('rendering a subset of apps', () => {
   it('leaves the remaining apps untouched', () => {
     const files = renderWithout('admin');
     const expected = baselineFor('conf.d/web-ssl.conf')!;
-    expect(normalizeNginxConfig(files.get('conf.d/web-ssl.conf')!)).toBe(
-      normalizeNginxConfig(expected),
-    );
+    expect(normalizeNginxConfig(files.get('conf.d/web-ssl.conf')!)).toBe(expected);
   });
 });
 
@@ -212,9 +226,7 @@ describe('rendering with the monitor container absent', () => {
     const files = renderWithoutMonitor();
     for (const app of ['api', 'web', 'admin']) {
       const expected = baselineFor(`conf.d/${app}-ssl.conf`)!;
-      expect(normalizeNginxConfig(files.get(`conf.d/${app}-ssl.conf`)!)).toBe(
-        normalizeNginxConfig(expected),
-      );
+      expect(normalizeNginxConfig(files.get(`conf.d/${app}-ssl.conf`)!)).toBe(expected);
     }
   });
 
