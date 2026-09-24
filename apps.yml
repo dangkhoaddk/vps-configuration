@@ -73,9 +73,12 @@ apps:
       - www.admin.balispacafe.com
     primaryDomain: admin.balispacafe.com
     upstream:
+      # The container sets PORT=5001 and serves from nginx, not 3000. Corrected
+      # from the live capture: this was the one place rendering disagreed with
+      # what production serves, and it would have 502'd the site on first apply.
       name: admin_frontend
       container: spa-admin
-      port: 3000
+      port: 5001
     # Parity: admin differs from the other two. Not a mistake, not normalized.
     frameOptions: SAMEORIGIN
     websockets: false
