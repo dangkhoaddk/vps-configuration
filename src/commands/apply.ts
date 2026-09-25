@@ -6,6 +6,7 @@ import { withConfigLock } from '../lock/config-lock.js';
 import { repoPaths } from '../repo-paths.js';
 import { loadRegistry } from '../registry/load-registry.js';
 import { planRender } from './plan-render.js';
+import { planReload } from './plan-reload.js';
 
 export interface ApplyOptions {
   app?: string;
@@ -77,17 +78,27 @@ function runApply(options: ApplyOptions): number {
   for (const path of plan.updated) console.log(`  ~ ${path}`);
   for (const path of plan.removed) console.log(`  - ${path} (no longer rendered)`);
 
-  if (isNoOp(plan)) {
-    console.log('✓ no changes; nginx not reloaded');
+  // A no-op render can still require a reload: see planReload. The diff is not
+  // the only thing that invalidates what nginx has loaded.
+  const noOp = isNoOp(plan);
+  const reloadDecision = planReload(noOp, options.app);
+
+  if (!reloadDecision.reload) {
+    console.log(`✓ ${reloadDecision.message}`);
     return 0;
   }
 
   if (dryRun) {
-    const changes = plan.created.length + plan.updated.length + plan.removed.length;
-    console.log(`\n(dry run) ${changes} file(s) would change; nothing was written`);
+    if (noOp) {
+      console.log(`\n(dry run) ${reloadDecision.message}; nothing was written`);
+    } else {
+      const changes = plan.created.length + plan.updated.length + plan.removed.length;
+      console.log(`\n(dry run) ${changes} file(s) would change; nothing was written`);
+    }
     return 0;
   }
 
+  if (noOp) console.log(`✓ ${reloadDecision.message}`);
   syncConfigFiles(files, config.paths);
 
   const reload = reloadNginx(config);

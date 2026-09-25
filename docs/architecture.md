@@ -160,6 +160,27 @@ cross-repo trigger, they are logged in that app's repository rather than this
 one. `vpsctl diff --live` is the single check that answers whether the running
 config still matches this repo.
 
+### Why an unchanged config can still need a reload
+
+The same rule has a second edge, and it is the one that is easy to miss:
+**nginx holding a stale upstream address is not visible in the config diff.**
+
+An app's pipeline calls `apply --app <name>` right after starting or recreating
+its own container. If that container comes back on a different address, nginx is
+still proxying to the address the old one had. The rendered config is
+byte-identical, so a reload decision based on the diff alone does nothing, and
+the site serves 502 until something else reloads nginx.
+
+The deploy scripts this repo replaced never hit it, because they ended with an
+unconditional `nginx -s reload` or a force-recreate. Dropping that was right, and
+it was also doing something load-bearing that nothing replaced.
+
+So `--app <name>` means "this app's container just moved, re-resolve it" and
+reloads even on a no-op. A graceful reload costs nothing: existing connections
+finish on the old workers, and an app deploy is already the disruptive event.
+Without `--app`, a no-op really is a no-op, since nobody is claiming a container
+moved. See `src/commands/plan-reload.ts`.
+
 ## Why reload distinguishes three states
 
 The old scripts ran `nginx -t && nginx -s reload || force-recreate`. That
