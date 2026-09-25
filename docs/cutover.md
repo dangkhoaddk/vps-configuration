@@ -249,6 +249,8 @@ spot-checking `netdatalib` sizes would wrongly conclude the history was lost.
    **Not yet.** That file is the rollback, and a rollback is worth keeping until
    the new stack has survived a reboot and a certificate renewal. The old
    `spa-api_netdata*` volumes are still on the host for the same reason.
-5. Certificates are still at `$CERTS_ROOT` inside the spa-api checkout. That is
-   unchanged by design and remains open in
-   [known-issues.md](known-issues.md).
+5. Certificates moved out of the spa-api checkout to
+   `/root/vps-configuration/certbot` on 2026-09-25, once container ownership had
+   moved and settled. One variable at a time, as intended. A copy stays at the
+   old path for as long as the rollback in step 3 does, since that rollback
+   mounts it.

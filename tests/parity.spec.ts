@@ -66,7 +66,7 @@ const ENV = {
   // the fixture cannot teach anyone a path that does not exist on the host.
   NGINX_CONF_DIR: '/root/spa-api/nginx/conf',
   SNIPPETS_DIR: '/root/spa-api/nginx/snippets',
-  CERTS_ROOT: '/root/spa-api/certbot',
+  CERTS_ROOT: '/root/vps-configuration/certbot',
   // Arbitrary: acme.email is used only by `cert issue`, never rendered into config.
   ACME_EMAIL: 'ops@example.com',
 };
