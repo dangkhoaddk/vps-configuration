@@ -12,6 +12,15 @@ rendered/
 # nginx access/error logs. spa-api committed these by accident; do not repeat it.
 nginx-log/
 
+# Let's Encrypt state, when CERTS_ROOT points inside this checkout. PRIVATE KEYS
+# for every domain on the host. Never commit them.
+#
+# This being gitignored is also why the directory survives a deploy: the
+# workflow's `git reset --hard origin/main` does not touch untracked files.
+# `git clean -xdf` DOES, and would destroy every certificate. See
+# docs/known-issues.md.
+certbot/
+
 .DS_Store
 .vpsctl-scratch/
 .vpsctl.lock*

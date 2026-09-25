@@ -8,7 +8,6 @@ disappears quietly; when something is fixed it moves rather than vanishes.
 | # | Issue | Fix |
 |---|---|---|
 | 0 | Routine applies don't appear in this repo's history | Revisit cross-repo dispatch via a GitHub App, if audit trail becomes priority |
-| 1 | Certificates live inside `spa-api`'s checkout | Move to a named docker volume or a path this repo owns |
 | 2 | `/monitor/` is unauthenticated | HTTP basic auth or IP allowlist in `templates/snippets/monitor.conf` |
 | 3 | `SSH_KEY` stored in `vars`, not `secrets`, in two app repos | Move to `secrets`, update workflow refs, rotate the key |
 | 6 | Dead nginx config in spa-web | Delete `spa-web/deploy/nginx/bali-spa.conf` |
@@ -33,23 +32,6 @@ worth having in the periodic list.
 
 *Fix:* if the audit trail becomes the priority, revisit the cross-repo dispatch
 with a GitHub App rather than a personal access token.
-
-### 1. Certificates live inside an application repository
-
-`CERTS_ROOT` points at `~/spa-api/certbot`. Let's Encrypt state for **every**
-domain sits inside one app's checkout. Deleting or re-provisioning that directory
-destroys the certificates for all sites.
-
-Deliberate round-one debt: keeping the path fixed means taking over the containers
-does not also move the certificates, so only one variable changes at a time.
-
-Container ownership moved on 2026-09-25 and the certificates deliberately did
-not, so this is now the last piece of round one still outstanding. It is no
-longer blocked by anything: `CERTS_ROOT` is a variable in `stack/.env`, and the
-edge stack that reads it is owned by this repo.
-
-*Fix:* move to a named docker volume or a path this repo owns. Back up first, and
-copy the backup off the host.
 
 ### 2. `/monitor/` is unauthenticated
 
@@ -138,6 +120,33 @@ neither is a code change. Afterwards, confirm an app deploy log no longer
 contains `403 Forbidden`.
 
 ## Fixed
+
+### Certificates lived inside an application repository
+
+`CERTS_ROOT` pointed at `/root/spa-api/certbot`: Let's Encrypt state for **every**
+domain sat inside one application's checkout, where re-provisioning that app
+would have destroyed TLS for all three sites.
+
+Moved to `/root/vps-configuration/certbot` on 2026-09-25, after container
+ownership moved, so only one variable changed at a time.
+
+The move is transparent to certbot. Its renewal configs reference the
+container-side `/etc/letsencrypt`, never the host directory, so the mount point
+is unchanged and nothing in `renewal/*.conf` or the rendered nginx config needed
+editing. Verified by fingerprint before and after.
+
+Copied rather than moved: `spa-api/docker-compose.sa.yml` is still the part B
+rollback and mounts `./certbot/conf`. Moving the directory would have left that
+rollback mounting a path that no longer exists, which docker creates as an empty
+directory rather than failing, bringing nginx back with no certificates at all.
+The duplicate at the old path goes when the rollback does.
+
+**Residual risk, accepted deliberately:** the new location is inside a git
+checkout. `git clean -xdf` there would destroy every certificate. Deploys are
+safe, since `git reset --hard origin/main` does not touch untracked files, and
+`certbot/` is gitignored so the keys can never be committed. A path outside every
+checkout, such as `/srv`, would not have this exposure. Recorded in
+`runbook.md` and in `stack/.env.example`.
 
 ### The edge deploy raced the image build
 

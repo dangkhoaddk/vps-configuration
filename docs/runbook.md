@@ -167,10 +167,15 @@ certificates and config live on the host filesystem, not in the containers.
 | Location snippets | `$SNIPPETS_DIR` |
 | Paths themselves | `stack/.env` |
 
-**Certificates currently live inside the `spa-api` checkout.** Deleting or
-re-provisioning that directory destroys the certificates for every domain. This is
-known round-one debt, tracked in [known-issues.md](known-issues.md). Back them up
-before touching anything near it:
+**Certificates live inside this repo's checkout**, at
+`/root/vps-configuration/certbot`, gitignored. They moved out of the `spa-api`
+checkout on 2026-09-25, so an application repo being re-provisioned no longer
+destroys TLS for every domain.
+
+**`git clean -xdf` in this checkout still would.** Untracked and ignored files
+are exactly what it removes, and that is every private key on the host. Deploys
+are safe: they run `git reset --hard origin/main`, which leaves untracked files
+alone. Back them up before touching anything near it:
 
 ```sh
 tar czf ~/certbot-backup-$(date +%F).tgz -C "$(dirname "$CERTS_ROOT")" "$(basename "$CERTS_ROOT")"
