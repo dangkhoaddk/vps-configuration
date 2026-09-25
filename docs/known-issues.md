@@ -20,8 +20,8 @@ disappears quietly; when something is fixed it moves rather than vanishes.
 ### 0. Routine applies do not appear in this repo's history
 
 App pipelines call `vpsctl apply` over their own SSH session, so those runs show
-up in the calling app's Actions log, not here. This repo's `deploy.yml` only
-fires on changes to its own files.
+up in the calling app's Actions log, not here. This repo's `deploy.yml` fires on
+its own pushes to `main`, not on theirs.
 
 The trade was deliberate: a cross-repo trigger would have needed a token in all
 three app repos with enough scope to push to this one, which is a larger blast
@@ -133,6 +133,30 @@ neither is a code change. Afterwards, confirm an app deploy log no longer
 contains `403 Forbidden`.
 
 ## Fixed
+
+### The edge deploy raced the image build
+
+`deploy.yml` and `ci.yml` both triggered on `push` to `main`, as separate
+workflows with no ordering between them, so the deploy raced the image build and
+usually won. On 2026-09-25 the deploy finished at 07:45:01 and `build-and-push`
+did not publish until 07:45:30: the VPS pulled 29 seconds before the new image
+existed and then ran a `vpsctl` older than the commit being deployed. Both
+workflows reported success, because neither was wrong about its own work.
+
+Caught only by checking the image contents on the host rather than trusting two
+green checkmarks, which is not a control.
+
+`deploy.yml` now triggers on `workflow_run` of CI completing. That is the only
+way to order two workflows: `needs` works within one, not across them. CI's last
+job pushes the image, so waiting for CI is waiting for the image. The job guards
+on `event == 'push'`, `head_branch == 'main'` and `conclusion == 'success'`, so
+a passing PR check never reaches production.
+
+The `paths` filter went with it. It listed `apps.yml`, `templates/`, `src/` and
+the compose file, which silently excluded `bin/vpsctl` — the script every deploy
+runs — so a change to it never triggered a deploy. Applying on every successful
+CI run costs one no-op render for a docs-only push and removes a list that is
+wrong whenever someone forgets to update it.
 
 ### A no-op apply left nginx proxying to a destroyed container
 

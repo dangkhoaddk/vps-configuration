@@ -105,8 +105,12 @@ old deploy scripts produced, and editing it weakens that evidence. Finish
 
 ## 3. Merge and deploy
 
-Merging to `main` triggers `.github/workflows/deploy.yml`, which applies on the
-VPS. Or do it by hand:
+Merging to `main` runs CI, and `.github/workflows/deploy.yml` applies on the VPS
+once CI passes. It waits for CI rather than running beside it, so the VPS never
+pulls a `vpsctl` image older than the commit being deployed. A failing CI run
+therefore deploys nothing.
+
+Or do it by hand:
 
 ```sh
 cd ~/vps-configuration && git pull
