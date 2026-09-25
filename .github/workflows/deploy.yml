@@ -12,14 +12,28 @@ name: Deploy edge config
 # lock on the VPS, which also covers app pipelines and operators running it by
 # hand. A concurrency group here would only order this repo's own runs.
 
+# Runs AFTER CI, never beside it.
+#
+# This used to trigger on `push` to main, the same event as CI. Two workflows,
+# no ordering between them, so the deploy raced the image build and usually won:
+# on 2026-09-25 the deploy finished at 07:45:01 and `build-and-push` did not
+# publish until 07:45:30. The VPS pulled an image 29 seconds before the new one
+# existed, and ran a `vpsctl` that predated the commit being deployed. Both jobs
+# reported success, because neither was wrong about its own work.
+#
+# `workflow_run` is the only way to order two workflows: `needs` works within a
+# workflow, not across them. CI's last job pushes the image, so waiting for CI
+# to complete is waiting for the image.
+#
+# The `paths` filter is gone with it. It listed apps.yml, templates, src and the
+# compose file, which silently excluded `bin/vpsctl` — the script every deploy
+# runs. Rather than maintain a list that is wrong when someone forgets it, apply
+# on every successful CI run: with no `--app`, an unchanged config renders, tests
+# clean, writes nothing and does not reload. A docs-only push costs one no-op.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "apps.yml"
-      - "templates/**"
-      - "src/**"
-      - "stack/compose.edge.yml"
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       app:
@@ -36,6 +50,15 @@ concurrency:
 
 jobs:
   deploy:
+    # CI also runs on pull_request, and workflow_run fires for those too. Deploy
+    # only for a push to main that actually passed, so a green PR check never
+    # reaches production and a failed build-and-push never gets applied on top of
+    # an image that was not published.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.conclusion == 'success')
     environment: prod
     runs-on: ubuntu-latest
     permissions:
@@ -73,6 +96,13 @@ jobs:
 
             cd "$REPO_DIR"
             git fetch origin
+            # main HEAD, not the SHA that triggered this run. If a second push
+            # lands while this one is in flight, the checkout is the newer commit
+            # and the image may still be the older build. That window closes on
+            # its own when the second push's own deploy runs, and the concurrency
+            # group above keeps the two from interleaving. Pinning the SHA
+            # instead would leave the VPS on a detached HEAD, which the app
+            # pipelines' `git pull --ff-only origin main` cannot recover from.
             git reset --hard origin/main
 
             # Constrain the input before it becomes an argument. App names are
