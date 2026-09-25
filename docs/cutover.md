@@ -212,6 +212,32 @@ cd ~/spa-api && docker compose -f docker-compose.sa.yml up -d nginx certbot moni
 
 Seconds. Restore the certificate archive first if anything touched it.
 
+### Done: 2026-09-25
+
+**Measured downtime: about 20 seconds** (stop issued 09:19:15 UTC, all three
+containers running by 09:19:32). Run mid-afternoon local time rather than in the
+traffic trough, a deliberate trade for having someone watching.
+
+The acceptance test passed: `nginx -T` **byte-identical** before and after, so
+ownership moved and nothing else did. Verified afterwards:
+
+| Check | Result |
+|---|---|
+| `nginx -T` before vs after | identical |
+| All sites | 200 |
+| Container ownership | all three now project `vps-edge` |
+| certbot renewal loop | alive, `restart: unless-stopped` now set |
+| Netdata host metrics | `pid=host`, `SYS_ADMIN`/`SYS_PTRACE`, `/host/proc` mounted |
+| Netdata history | retained from 2026-09-06, ~19 days, carried across volumes |
+| Certificate fingerprints | unchanged on all three domains |
+| `vpsctl diff --live` | clean |
+
+Worth knowing for next time: Netdata's metrics database is in
+`/var/cache/netdata`, not `/var/lib/netdata`. The `netdatacache` volume is the
+1.2 GB one and the one that actually matters; `netdatalib` is 48 KB of metadata.
+The migration loop copies all three, so this changes nothing, but anyone
+spot-checking `netdatalib` sizes would wrongly conclude the history was lost.
+
 ### Afterwards
 
 1. `docker logs certbot` — confirm the renewal loop is alive. The new stack adds
@@ -220,7 +246,9 @@ Seconds. Restore the certificate archive first if anything touched it.
    verifies `pid: host` and the `/host` mounts survived the port.
 3. Remove `nginx`, `certbot` and `monitor` from `spa-api/docker-compose.sa.yml`,
    and the remaining `docker-compose.sa.yml` calls from `spa-api/tool/deploy.sh`.
-4. Record the measured downtime here.
+   **Not yet.** That file is the rollback, and a rollback is worth keeping until
+   the new stack has survived a reboot and a certificate renewal. The old
+   `spa-api_netdata*` volumes are still on the host for the same reason.
 5. Certificates are still at `$CERTS_ROOT` inside the spa-api checkout. That is
    unchanged by design and remains open in
    [known-issues.md](known-issues.md).

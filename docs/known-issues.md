@@ -43,6 +43,11 @@ destroys the certificates for all sites.
 Deliberate round-one debt: keeping the path fixed means taking over the containers
 does not also move the certificates, so only one variable changes at a time.
 
+Container ownership moved on 2026-09-25 and the certificates deliberately did
+not, so this is now the last piece of round one still outstanding. It is no
+longer blocked by anything: `CERTS_ROOT` is a variable in `stack/.env`, and the
+edge stack that reads it is owned by this repo.
+
 *Fix:* move to a named docker volume or a path this repo owns. Back up first, and
 copy the backup off the host.
 
