@@ -43,9 +43,30 @@ for dir in "$NGINX_CONF_DIR" "$SNIPPETS_DIR" "$CERTS_ROOT"; do
 done
 
 # Built and pushed to GHCR in CI. Pulled fresh on every run so a deploy always
-# gets the version that last passed CI; `|| true` so a network blip falls back
-# to whatever is already cached locally instead of hard-failing a deploy.
-docker pull -q "$IMAGE" >&2 || true
+# gets the version that last passed CI.
+#
+# A failed pull is not fatal when an image is already cached: a network blip
+# should not take down a deploy. But it must be LOUD, because what it otherwise
+# hides is the exact failure this repo exists to prevent - a VPS running a stale
+# vpsctl against a current apps.yml, reporting success the whole way.
+#
+# The pull failing is not hypothetical. Each app's pipeline logs in to GHCR with
+# its own repository's GITHUB_TOKEN, which has no read access to this package, so
+# it 403s on every app deploy. That is a package-permission fix, not a shell one;
+# this only makes sure it cannot happen quietly.
+if pull_error="$(docker pull -q "$IMAGE" 2>&1 >/dev/null)"; then
+  :
+elif cached_at="$(docker image inspect "$IMAGE" --format '{{.Created}}' 2>/dev/null)"; then
+  echo "!! Could not pull $IMAGE" >&2
+  echo "!!   $pull_error" >&2
+  echo "!! Falling back to the locally cached image, built $cached_at." >&2
+  echo "!! That image may be older than apps.yml. If routing looks wrong, this is why." >&2
+else
+  echo "Could not pull $IMAGE, and no cached copy exists to fall back to." >&2
+  echo "  $pull_error" >&2
+  echo "  Authenticate first: echo \$TOKEN | docker login ghcr.io -u <user> --password-stdin" >&2
+  exit 1
+fi
 
 # VPSCTL_HOST_REPO_DIR lets the containerised CLI translate its own scratch paths
 # back to host paths when it builds bind-mount sources for other containers.
