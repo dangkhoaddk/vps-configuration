@@ -134,6 +134,23 @@ contains `403 Forbidden`.
 
 ## Fixed
 
+### A no-op apply left nginx proxying to a destroyed container
+
+Caused a production outage on 2026-09-25: a web deploy recreated its container,
+`apply --app web` rendered byte-identical config, printed
+`no changes; nginx not reloaded`, and `balispacafe.com` served 502 for about
+eight minutes. nginx was still holding the old container's address, because it
+resolves upstream hostnames at config-load time.
+
+The upstream-resolution rule was already documented and already guarded in the
+*render* path. It was not carried through to the *reload* path, where a config
+diff of zero is not the same as nothing having changed.
+
+`apply --app <name>` now reloads even on a no-op, since that flag means the
+named app's container has just been started or recreated. Covered by
+`tests/plan-reload.spec.ts` and explained in
+[architecture.md](architecture.md).
+
 ### Cutover was blocked on a live baseline capture
 
 `docker exec nginx_proxy nginx -T` is captured and committed to
