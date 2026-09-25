@@ -13,6 +13,7 @@ disappears quietly; when something is fixed it moves rather than vanishes.
 | 3 | `SSH_KEY` stored in `vars`, not `secrets`, in two app repos | Move to `secrets`, update workflow refs, rotate the key |
 | 6 | Dead nginx config in spa-web | Delete `spa-web/deploy/nginx/bali-spa.conf` |
 | 8 | `stack/.env.example` shipped paths that do not exist on the host | Fixed in the example; the VPS `.env` still needs correcting before any apply |
+| 9 | App pipelines 403 pulling the vpsctl image and run a cached one | Grant each app repo read access to the package, or make it public |
 
 ## Open
 
@@ -101,6 +102,35 @@ The example is fixed. Two things remain:
 `/home/deploy` tree once it is confirmed unreferenced. Consider whether
 auto-creating `.env` from an example of absolute paths is worth its convenience,
 given the failure is silent.
+
+### 9. App pipelines cannot pull the vpsctl image
+
+Every app deploy that calls `vpsctl` fails to pull the image:
+
+```
+failed to resolve reference "ghcr.io/dangkhoaddk/vps-configuration:latest":
+  403 Forbidden
+```
+
+Each app's workflow logs in to GHCR with **its own repository's**
+`GITHUB_TOKEN`. That token can read that repository's packages, not this one's.
+Adding the `docker login` step made the app's own image pull work and left this
+one failing, which is why it was not obvious.
+
+Until this is fixed, the VPS runs whatever `vpsctl` image is already cached. It
+happens to match `main` today, so applies are correct. The moment `src/` changes,
+app deploys will run stale code against current `apps.yml` and report success.
+A stale renderer producing config that no longer matches the registry is the
+precise failure this repo exists to prevent.
+
+`bin/vpsctl` no longer hides it: a failed pull with a cached image warns loudly
+with the cached image's build date, and a failed pull with no cached image exits
+non-zero. That is containment, not a fix. The pull still fails every time.
+
+*Fix:* grant each app repository read access to the `vps-configuration` package,
+or make the package public. Both are in the package's settings on GitHub, and
+neither is a code change. Afterwards, confirm an app deploy log no longer
+contains `403 Forbidden`.
 
 ## Fixed
 
